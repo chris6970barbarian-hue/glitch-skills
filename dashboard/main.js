@@ -41,6 +41,20 @@ function loadConfig() {
   return config;
 }
 
+// ============ Utilities ============
+
+function execPromise(cmd, timeout = 2000) {
+  return new Promise((resolve, reject) => {
+    const proc = exec(cmd, { timeout }, (err, stdout, stderr) => {
+      if (err && err.killed) {
+        resolve({ error: 'timeout' });
+        return;
+      }
+      resolve({ stdout: stdout || '', stderr: stderr || '', error: err?.message });
+    });
+  });
+}
+
 // ============ System Monitor Functions ============
 
 function getSystemStatus() {
@@ -80,47 +94,45 @@ function formatUptime(seconds) {
 // ============ Task Queue Functions ============
 
 function getTaskQueueStatus() {
-  return new Promise((resolve) => {
-    exec('node ~/.openclaw/workspace/skills/queue-sync/main.js status 2>/dev/null', (err, stdout) => {
-      if (err || !stdout.trim()) {
-        resolve({ error: 'Task queue not available' });
-        return;
-      }
-      try {
-        resolve(JSON.parse(stdout));
-      } catch (e) {
-        resolve({ error: 'Parse error' });
-      }
-    });
+  return new Promise(async (resolve) => {
+    const result = await execPromise('node ~/.openclaw/workspace/skills/queue-sync/main.js status 2>/dev/null');
+    if (result.error || !result.stdout.trim()) {
+      resolve({ error: 'Task queue not available' });
+      return;
+    }
+    try {
+      resolve(JSON.parse(result.stdout));
+    } catch (e) {
+      resolve({ error: 'Parse error' });
+    }
   });
 }
 
 // ============ ZeroTier Functions ============
 
 function getZeroTierStatus() {
-  return new Promise((resolve) => {
-    exec('sudo zerotier-cli listnetworks 2>/dev/null', (err, stdout) => {
-      if (err) {
-        resolve({ installed: false });
-        return;
-      }
-      const lines = stdout.trim().split('\n');
-      if (lines.length < 2) {
-        resolve({ installed: true, networks: [] });
-        return;
-      }
-      const parts = lines[1].split(/\s+/);
-      resolve({
-        installed: true,
-        online: true,
-        address: '735eb2f8f5',
-        networks: [{
-          id: parts[1],
-          name: parts[2],
-          status: parts[4],
-          ip: parts[6] || 'N/A'
-        }]
-      });
+  return new Promise(async (resolve) => {
+    const result = await execPromise('sudo zerotier-cli listnetworks 2>/dev/null');
+    if (result.error) {
+      resolve({ installed: false });
+      return;
+    }
+    const lines = result.stdout.trim().split('\n');
+    if (lines.length < 2) {
+      resolve({ installed: true, networks: [] });
+      return;
+    }
+    const parts = lines[1].split(/\s+/);
+    resolve({
+      installed: true,
+      online: true,
+      address: '735eb2f8f5',
+      networks: [{
+        id: parts[1],
+        name: parts[2],
+        status: parts[4],
+        ip: parts[6] || 'N/A'
+      }]
     });
   });
 }
@@ -128,18 +140,17 @@ function getZeroTierStatus() {
 // ============ Output Streamer Functions ============
 
 function getOutputBuffer() {
-  return new Promise((resolve) => {
-    exec('node ~/.openclaw/workspace/skills/output-streamer/main.js buffer 10 2>/dev/null', (err, stdout) => {
-      if (err || !stdout.trim()) {
-        resolve([]);
-        return;
-      }
-      try {
-        resolve(JSON.parse(stdout).slice(-10));
-      } catch (e) {
-        resolve([]);
-      }
-    });
+  return new Promise(async (resolve) => {
+    const result = await execPromise('node ~/.openclaw/workspace/skills/output-streamer/main.js buffer 10 2>/dev/null');
+    if (result.error || !result.stdout.trim()) {
+      resolve([]);
+      return;
+    }
+    try {
+      resolve(JSON.parse(result.stdout).slice(-10));
+    } catch (e) {
+      resolve([]);
+    }
   });
 }
 
@@ -446,13 +457,13 @@ async function handleRequest(req, res) {
   
   // API endpoints
   if (url.pathname === '/api/complete' && req.method === 'POST') {
-    exec('node ~/.openclaw/workspace/skills/queue-sync/main.js complete 2>/dev/null');
+    execPromise('node ~/.openclaw/workspace/skills/queue-sync/main.js complete 2>/dev/null');
     res.end(JSON.stringify({ success: true }));
     return;
   }
   
   if (url.pathname === '/api/clear' && req.method === 'POST') {
-    exec('node ~/.openclaw/workspace/skills/queue-sync/main.js clear 2>/dev/null');
+    execPromise('node ~/.openclaw/workspace/skills/queue-sync/main.js clear 2>/dev/null');
     res.end(JSON.stringify({ success: true }));
     return;
   }
