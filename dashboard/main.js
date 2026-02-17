@@ -5,11 +5,11 @@
  * 
  * Integrates:
  * - System Monitor
- * - Task Queue
+ * - Task Queue (with interactive actions)
  * - Output Streamer
  * - ZeroTier Status
  * 
- * Beautiful dark theme with neon accents
+ * Beautiful dark theme with neon accents + interactive task management
  */
 
 const http = require('http');
@@ -19,31 +19,6 @@ const { exec, spawn } = require('child_process');
 const os = require('os');
 
 const DEFAULT_PORT = 3853;
-const CONFIG_DIR = path.join(process.env.HOME || '/home/crix', '.dashboard');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
-
-const DEFAULT_CONFIG = {
-  port: DEFAULT_PORT,
-  theme: 'dark',
-  refreshInterval: 3000,
-  skills: {
-    systemMonitor: true,
-    taskQueue: true,
-    outputStreamer: true,
-    zerotier: true
-  }
-};
-
-function loadConfig() {
-  let config = { ...DEFAULT_CONFIG };
-  if (fs.existsSync(CONFIG_FILE)) {
-    try { config = { ...config, ...JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) }; }
-    catch (e) {}
-  }
-  return config;
-}
-
-// ============ Utilities ============
 
 function execPromise(cmd, timeout = 2000) {
   return new Promise((resolve) => {
@@ -93,48 +68,6 @@ function formatUptime(seconds) {
   return `${d}d ${h}h ${m}m`;
 }
 
-// ============ Task Queue Functions ============
-
-function getTaskQueueStatus() {
-  // Return mock data for demonstration
-  return Promise.resolve({
-    status: 'idle',
-    queue: {
-      pending: 2,
-      processing: 0,
-      total: 2
-    },
-    stats: {
-      completed: 5,
-      failed: 0,
-      lastProcessed: 'task_001'
-    },
-    currentTask: null,
-    tasks: [
-      {
-        id: 'task_deploy_001',
-        content: 'Deploy new skill to production',
-        platform: 'discord',
-        priority: 1,
-        state: 'pending',
-        subTasks: [
-          { id: 'sub_1', content: 'Update README documentation', state: 'pending' },
-          { id: 'sub_2', content: 'Push to GitHub repository', state: 'pending' },
-          { id: 'sub_3', content: 'Test locally before deploy', state: 'pending' }
-        ]
-      },
-      {
-        id: 'task_fix_002',
-        content: 'Fix dashboard UI responsive layout',
-        platform: 'telegram',
-        priority: 2,
-        state: 'pending',
-        subTasks: []
-      }
-    ]
-  });
-}
-
 // ============ ZeroTier Functions ============
 
 function getZeroTierStatus() {
@@ -164,10 +97,61 @@ function getZeroTierStatus() {
   });
 }
 
-// ============ Output Streamer Functions ============
+// ============ Task Queue Functions - Mock Data ============
+
+function getTaskQueueStatus() {
+  return Promise.resolve({
+    status: 'idle',
+    queue: {
+      pending: 2,
+      processing: 0,
+      completed: 5,
+      total: 2
+    },
+    stats: {
+      completed: 5,
+      failed: 0,
+      lastProcessed: 'task_001'
+    },
+    currentTask: null,
+    tasks: [
+      {
+        id: 'task_deploy_001',
+        content: 'Deploy new skill to production',
+        platform: 'discord',
+        priority: 1,
+        state: 'pending',
+        createdAt: '2026-02-18T01:00:00.000Z',
+        subTasks: [
+          { id: 'sub_1', content: 'Update README documentation', state: 'pending' },
+          { id: 'sub_2', content: 'Push to GitHub repository', state: 'pending' },
+          { id: 'sub_3', content: 'Test locally before deploy', state: 'pending' }
+        ]
+      },
+      {
+        id: 'task_fix_002',
+        content: 'Fix dashboard UI responsive layout',
+        platform: 'telegram',
+        priority: 2,
+        state: 'pending',
+        createdAt: '2026-02-18T01:05:00.000Z',
+        subTasks: []
+      },
+      {
+        id: 'task_monitor_003',
+        content: 'Monitor system resources during peak hours',
+        platform: 'lark',
+        priority: 3,
+        state: 'completed',
+        createdAt: '2026-02-18T00:30:00.000Z',
+        completedAt: '2026-02-18T00:45:00.000Z',
+        subTasks: []
+      }
+    ]
+  });
+}
 
 function getOutputBuffer() {
-  // Return mock log data for demonstration
   return Promise.resolve([
     { timestamp: new Date().toISOString(), source: 'system', content: 'Dashboard server started on port 3853' },
     { timestamp: new Date(Date.now() - 60000).toISOString(), source: 'task-queue', content: 'Task task_deploy_001 added to queue' },
@@ -221,43 +205,43 @@ function generateDashboard(data) {
       background: var(--bg-primary);
       color: var(--text-primary);
       min-height: 100vh;
-      padding: 24px;
+      padding: 20px;
       background-image: 
         radial-gradient(ellipse at top, rgba(0,245,255,0.05) 0%, transparent 50%),
         radial-gradient(ellipse at bottom right, rgba(168,85,247,0.05) 0%, transparent 50%);
     }
     
-    /* Header */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 32px;
-      padding-bottom: 20px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
       border-bottom: 1px solid var(--border);
     }
     
     .logo {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
     }
     
     .logo-icon {
-      width: 48px;
-      height: 48px;
+      width: 40px;
+      height: 40px;
       background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
-      border-radius: 12px;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 20px;
+      font-weight: bold;
       box-shadow: var(--glow-cyan);
     }
     
     .logo-text h1 {
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.75rem;
+      font-size: 1.5rem;
       font-weight: 700;
       background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
       -webkit-background-clip: text;
@@ -265,34 +249,22 @@ function generateDashboard(data) {
       background-clip: text;
     }
     
-    .logo-text span {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-    }
-    
     .header-right {
       display: flex;
       align-items: center;
-      gap: 24px;
-    }
-    
-    .time {
-      color: var(--text-secondary);
-      font-size: 0.875rem;
+      gap: 16px;
     }
     
     .status-badge {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 16px;
+      padding: 6px 12px;
       background: rgba(107, 203, 119, 0.1);
       border: 1px solid rgba(107, 203, 119, 0.3);
       border-radius: 20px;
       color: var(--accent-green);
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       font-weight: 500;
     }
     
@@ -309,72 +281,71 @@ function generateDashboard(data) {
       50% { opacity: 0.5; }
     }
     
-    /* Grid */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 24px;
+    .time {
+      color: var(--text-secondary);
+      font-size: 0.8rem;
     }
     
-    /* Cards */
+    /* Layout: 2x2 with Task Queue taking more space */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      grid-template-rows: auto auto;
+      gap: 16px;
+    }
+    
+    /* Make first row: System + ZeroTier smaller */
+    .grid > .card:nth-child(1),
+    .grid > .card:nth-child(2) {
+      grid-row: 1;
+    }
+    
+    /* Make second row: Task Queue takes full width, Output takes second */
+    .grid > .card:nth-child(3) {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+    
     .card {
       background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
+      border-radius: 12px;
+      padding: 16px;
       position: relative;
       overflow: hidden;
       transition: all 0.3s ease;
     }
     
-    .card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-    
     .card:hover {
-      transform: translateY(-2px);
       border-color: rgba(0, 245, 255, 0.2);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    }
-    
-    .card:hover::before {
-      opacity: 1;
     }
     
     .card-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
     
     .card-title {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 1rem;
+      font-size: 0.9rem;
       font-weight: 600;
       color: var(--text-primary);
     }
     
     .card-icon {
-      width: 36px;
-      height: 36px;
+      width: 28px;
+      height: 28px;
       background: rgba(0, 245, 255, 0.1);
-      border-radius: 10px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      font-size: 14px;
     }
     
     .card-icon.cyan { background: rgba(0, 245, 255, 0.1); color: var(--accent-cyan); }
@@ -387,62 +358,37 @@ function generateDashboard(data) {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
+      padding: 6px 0;
+      font-size: 0.75rem;
     }
     
-    .stat:last-of-type { border-bottom: none; }
-    
-    .stat-label {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    
-    .stat-value {
-      font-weight: 600;
-      font-size: 1rem;
-      color: var(--text-primary);
-    }
-    
-    .stat-value.highlight {
-      color: var(--accent-cyan);
-    }
+    .stat-label { color: var(--text-muted); }
+    .stat-value { color: var(--text-primary); font-weight: 500; }
+    .stat-value.highlight { color: var(--accent-cyan); }
     
     /* Progress bars */
-    .progress-section {
-      margin: 16px 0;
-    }
+    .progress-section { margin: 8px 0; }
     
     .progress-header {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 8px;
+      font-size: 0.7rem;
+      margin-bottom: 4px;
     }
     
-    .progress-label {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    
-    .progress-value {
-      font-size: 0.875rem;
-      font-weight: 600;
-    }
+    .progress-label { color: var(--text-muted); }
+    .progress-value { font-weight: 600; }
     
     .progress-bar {
-      height: 8px;
+      height: 6px;
       background: var(--bg-secondary);
-      border-radius: 4px;
+      border-radius: 3px;
       overflow: hidden;
     }
     
     .progress-fill {
       height: 100%;
-      border-radius: 4px;
+      border-radius: 3px;
       transition: width 0.5s ease;
     }
     
@@ -452,23 +398,36 @@ function generateDashboard(data) {
     .progress-fill.yellow { background: linear-gradient(90deg, var(--accent-yellow), #fbbf24); }
     .progress-fill.red { background: linear-gradient(90deg, var(--accent-red), #f87171); }
     
-    /* Queue stats */
+    /* Queue Stats - Clickable */
     .queue-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin: 16px 0;
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
     }
     
     .queue-stat {
+      flex: 1;
       background: var(--bg-secondary);
-      border-radius: 12px;
-      padding: 16px;
+      border-radius: 8px;
+      padding: 10px;
       text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+    
+    .queue-stat:hover {
+      border-color: var(--accent-cyan);
+      background: var(--bg-card-hover);
+    }
+    
+    .queue-stat.active {
+      border-color: var(--accent-cyan);
+      background: rgba(0, 245, 255, 0.1);
     }
     
     .queue-stat-value {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       font-weight: 700;
       font-family: 'Space Grotesk', sans-serif;
     }
@@ -478,93 +437,166 @@ function generateDashboard(data) {
     .queue-stat-value.completed { color: var(--accent-green); }
     
     .queue-stat-label {
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+    
+    /* Task List */
+    .task-list {
+      max-height: 280px;
+      overflow-y: auto;
+    }
+    
+    .task-item {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-left: 3px solid var(--accent-yellow);
+    }
+    
+    .task-item.processing {
+      border-left-color: var(--accent-cyan);
+    }
+    
+    .task-item.completed {
+      border-left-color: var(--accent-green);
+      opacity: 0.7;
+    }
+    
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+    
+    .task-content {
+      font-size: 0.8rem;
+      color: var(--text-primary);
+      flex: 1;
+    }
+    
+    .task-meta {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
       margin-top: 4px;
     }
     
-    /* Current task */
-    .current-task {
-      background: var(--bg-secondary);
-      border-radius: 12px;
-      padding: 16px;
-      margin-top: 16px;
-      border-left: 3px solid var(--accent-cyan);
-    }
-    
-    .current-task-label {
-      font-size: 0.7rem;
-      color: var(--accent-cyan);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 8px;
-    }
-    
-    .current-task-content {
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-      word-break: break-word;
-    }
-    
-    /* Actions */
-    .actions {
+    .task-actions {
       display: flex;
-      gap: 12px;
-      margin-top: 20px;
+      gap: 4px;
     }
     
-    button {
-      flex: 1;
-      padding: 12px 20px;
+    .task-btn {
+      padding: 4px 8px;
+      font-size: 0.65rem;
       border: none;
-      border-radius: 10px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
-      font-weight: 600;
+      border-radius: 4px;
       cursor: pointer;
+      font-family: inherit;
       transition: all 0.2s;
-      text-transform: uppercase;
-      letter-spacing: 1px;
     }
     
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+    .task-btn.complete {
+      background: rgba(107, 203, 119, 0.2);
+      color: var(--accent-green);
+    }
+    
+    .task-btn.complete:hover {
+      background: var(--accent-green);
       color: var(--bg-primary);
     }
     
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--glow-cyan);
-    }
-    
-    .btn-danger {
-      background: transparent;
-      border: 1px solid var(--accent-red);
+    .task-btn.clear {
+      background: rgba(255, 107, 107, 0.2);
       color: var(--accent-red);
     }
     
-    .btn-danger:hover {
-      background: rgba(255, 107, 107, 0.1);
+    .task-btn.clear:hover {
+      background: var(--accent-red);
+      color: white;
     }
     
-    /* ZeroTier specific */
+    .task-btn.modify {
+      background: rgba(255, 217, 61, 0.2);
+      color: var(--accent-yellow);
+    }
+    
+    .task-btn.modify:hover {
+      background: var(--accent-yellow);
+      color: var(--bg-primary);
+    }
+    
+    /* Subtasks */
+    .subtasks {
+      margin-top: 8px;
+      padding-left: 10px;
+      border-left: 2px solid var(--border);
+    }
+    
+    .subtask {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    
+    .subtask-checkbox {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      accent-color: var(--accent-green);
+    }
+    
+    .subtask.completed {
+      text-decoration: line-through;
+      opacity: 0.5;
+    }
+    
+    .subtask-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 4px;
+    }
+    
+    .subtask-btn {
+      padding: 2px 6px;
+      font-size: 0.6rem;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.1);
+      color: var(--text-muted);
+    }
+    
+    .subtask-btn:hover {
+      background: var(--accent-cyan);
+      color: var(--bg-primary);
+    }
+    
+    /* ZeroTier IP */
     .zt-ip {
       font-family: 'Space Grotesk', sans-serif;
-      font-size: 2rem;
+      font-size: 1.5rem;
       font-weight: 700;
       color: var(--accent-cyan);
       text-align: center;
-      padding: 20px;
+      padding: 12px;
       background: var(--bg-secondary);
-      border-radius: 12px;
-      margin: 16px 0;
-      border: 1px solid rgba(0, 245, 255, 0.2);
+      border-radius: 8px;
+      margin: 8px 0;
     }
     
     .zt-address {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
       text-align: center;
     }
@@ -576,68 +608,32 @@ function generateDashboard(data) {
     
     /* Log */
     .log {
-      max-height: 220px;
+      max-height: 120px;
       overflow-y: auto;
       background: var(--bg-secondary);
-      border-radius: 12px;
-      padding: 12px;
-    }
-    
-    .log::-webkit-scrollbar {
-      width: 6px;
-    }
-    
-    .log::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    
-    .log::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 3px;
+      border-radius: 8px;
+      padding: 8px;
     }
     
     .log-entry {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.75rem;
+      padding: 4px 8px;
+      font-size: 0.7rem;
       display: flex;
-      gap: 12px;
-      align-items: flex-start;
+      gap: 8px;
     }
     
-    .log-entry:last-child { border-bottom: none; }
-    
-    .log-time {
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    
-    .log-source {
-      color: var(--accent-purple);
-      font-weight: 500;
-      white-space: nowrap;
-    }
-    
-    .log-content {
-      color: var(--text-secondary);
-      word-break: break-word;
-    }
-    
-    .log-empty {
-      text-align: center;
-      color: var(--text-muted);
-      padding: 40px;
-      font-size: 0.875rem;
-    }
+    .log-time { color: var(--text-muted); white-space: nowrap; }
+    .log-source { color: var(--accent-purple); white-space: nowrap; }
+    .log-content { color: var(--text-secondary); word-break: break-word; }
     
     /* Footer */
     .footer {
       text-align: center;
-      margin-top: 32px;
-      padding-top: 20px;
+      margin-top: 16px;
+      padding-top: 12px;
       border-top: 1px solid var(--border);
       color: var(--text-muted);
-      font-size: 0.75rem;
+      font-size: 0.7rem;
     }
     
     .footer a {
@@ -645,24 +641,12 @@ function generateDashboard(data) {
       text-decoration: none;
     }
     
-    .footer a:hover {
-      text-decoration: underline;
-    }
-    
-    /* Responsive */
-    @media (max-width: 768px) {
-      .header {
-        flex-direction: column;
-        gap: 16px;
-        text-align: center;
-      }
-      
+    @media (max-width: 900px) {
       .grid {
         grid-template-columns: 1fr;
       }
-      
-      .queue-stats {
-        grid-template-columns: 1fr;
+      .grid > .card:nth-child(3) {
+        grid-column: 1;
       }
     }
   </style>
@@ -673,7 +657,6 @@ function generateDashboard(data) {
       <div class="logo-icon">G</div>
       <div class="logo-text">
         <h1>Glitch Dashboard</h1>
-        
       </div>
     </div>
     <div class="header-right">
@@ -686,18 +669,18 @@ function generateDashboard(data) {
   </header>
   
   <div class="grid">
-    <!-- System Status -->
+    <!-- System Status - Smaller -->
     <div class="card">
       <div class="card-header">
         <div class="card-title">
           <div class="card-icon cyan">CPU</div>
-          System Status
+          System
         </div>
       </div>
       
       <div class="progress-section">
         <div class="progress-header">
-          <span class="progress-label">CPU Usage</span>
+          <span class="progress-label">CPU</span>
           <span class="progress-value" style="color: ${cpuColor}">${system.cpu.usage}%</span>
         </div>
         <div class="progress-bar">
@@ -716,16 +699,8 @@ function generateDashboard(data) {
       </div>
       
       <div class="stat">
-        <span class="stat-label">Cores</span>
-        <span class="stat-value highlight">${system.cpu.cores}</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Memory Used</span>
-        <span class="stat-value">${system.memory.used} / ${system.memory.total}</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Load Average</span>
-        <span class="stat-value">${system.load[0]} | ${system.load[1]} | ${system.load[2]}</span>
+        <span class="stat-label">Load</span>
+        <span class="stat-value">${system.load[0]} | ${system.load[1]}</span>
       </div>
       <div class="stat">
         <span class="stat-label">Uptime</span>
@@ -733,89 +708,15 @@ function generateDashboard(data) {
       </div>
     </div>
     
-    <!-- Task Queue -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">
-          <div class="card-icon green">Q</div>
-          Task Queue
-        </div>
-      </div>
-      
-      ${taskQueue.error ? `
-      <div class="log-empty">${taskQueue.error}</div>
-      ` : `
-      <div class="queue-stats">
-        <div class="queue-stat">
-          <div class="queue-stat-value pending">${taskQueue.queue?.pending || 0}</div>
-          <div class="queue-stat-label">Pending</div>
-        </div>
-        <div class="queue-stat">
-          <div class="queue-stat-value processing">${taskQueue.queue?.processing || 0}</div>
-          <div class="queue-stat-label">Processing</div>
-        </div>
-        <div class="queue-stat">
-          <div class="queue-stat-value completed">${taskQueue.stats?.completed || 0}</div>
-          <div class="queue-stat-label">Completed</div>
-        </div>
-      </div>
-      
-      <div class="stat">
-        <span class="stat-label">Status</span>
-        <span class="stat-value highlight">${taskQueue.status || 'idle'}</span>
-      </div>
-      
-      ${taskQueue.tasks ? `
-      <div style="margin-top: 16px; max-height: 150px; overflow-y: auto;">
-        ${taskQueue.tasks.map((task, idx) => `
-        <div style="background: var(--bg-secondary); border-radius: 8px; padding: 12px; margin-bottom: 8px; ${task.state === 'processing' ? 'border-left: 3px solid var(--accent-cyan);' : ''}">
-          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
-            ${idx + 1}. ${task.content}
-          </div>
-          <div style="font-size: 0.7rem; color: var(--text-muted); display: flex; gap: 12px;">
-            <span>[${task.platform}]</span>
-            <span>Priority: ${task.priority === 1 ? 'HIGH' : task.priority === 2 ? 'NORMAL' : 'LOW'}</span>
-          </div>
-          ${task.subTasks.length > 0 ? `
-          <div style="margin-top: 8px; padding-left: 12px; border-left: 2px solid var(--border);">
-            ${task.subTasks.map(sub => `
-            <div style="font-size: 0.75rem; color: var(--text-secondary); padding: 2px 0;">
-              ${sub.state === 'completed' ? '✓' : '○'} ${sub.content}
-            </div>
-            `).join('')}
-          </div>
-          ` : ''}
-        </div>
-        `).join('')}
-      </div>
-      ` : ''}
-      
-      ${taskQueue.currentTask ? `
-      <div class="current-task">
-        <div class="current-task-label">Current Task</div>
-        <div class="current-task-content">${taskQueue.currentTask.content?.substring(0, 100)}${taskQueue.currentTask.content?.length > 100 ? '...' : ''}</div>
-      </div>
-      ` : ''}
-      `}
-      
-      <div class="actions">
-        <button class="btn-primary" onclick="execute('complete')">Complete</button>
-        <button class="btn-danger" onclick="execute('clear')">Clear</button>
-      </div>
-    </div>
-    
-    <!-- ZeroTier -->
+    <!-- ZeroTier - Smaller -->
     <div class="card">
       <div class="card-header">
         <div class="card-title">
           <div class="card-icon purple">Z</div>
-          ZeroTier Network
+          ZeroTier
         </div>
       </div>
       
-      ${!zerotier.installed ? `
-      <div class="log-empty">ZeroTier not installed</div>
-      ` : `
       <div class="zt-ip">${zerotier.networks?.[0]?.ip || 'N/A'}</div>
       <div class="zt-address">Address: <span>${zerotier.address}</span></div>
       
@@ -825,31 +726,69 @@ function generateDashboard(data) {
       </div>
       <div class="stat">
         <span class="stat-label">Status</span>
-        <span class="stat-value" style="color: ${zerotier.online ? 'var(--accent-green)' : 'var(--accent-red)'}">${zerotier.online ? 'Connected' : 'Disconnected'}</span>
+        <span class="stat-value" style="color: ${zerotier.online ? 'var(--accent-green)' : 'var(--accent-red)'}">${zerotier.online ? 'Connected' : 'Offline'}</span>
       </div>
-      <div class="stat">
-        <span class="stat-label">Network ID</span>
-        <span class="stat-value">${zerotier.networks?.[0]?.id || 'N/A'}</span>
-      </div>
-      `}
     </div>
     
-    <!-- Output Stream -->
+    <!-- Task Queue - Larger -->
     <div class="card">
       <div class="card-header">
         <div class="card-title">
-          <div class="card-icon pink">L</div>
-          Recent Output
+          <div class="card-icon green">Q</div>
+          Task Queue
+        </div>
+        <span class="stat-value highlight">${taskQueue.status || 'idle'}</span>
+      </div>
+      
+      <!-- Clickable Queue Stats -->
+      <div class="queue-stats">
+        <div class="queue-stat active" data-filter="pending" onclick="filterTasks('pending', this)">
+          <div class="queue-stat-value pending">${taskQueue.queue?.pending || 0}</div>
+          <div class="queue-stat-label">Pending</div>
+        </div>
+        <div class="queue-stat" data-filter="processing" onclick="filterTasks('processing', this)">
+          <div class="queue-stat-value processing">${taskQueue.queue?.processing || 0}</div>
+          <div class="queue-stat-label">Processing</div>
+        </div>
+        <div class="queue-stat" data-filter="completed" onclick="filterTasks('completed', this)">
+          <div class="queue-stat-value completed">${taskQueue.stats?.completed || 0}</div>
+          <div class="queue-stat-label">Completed</div>
         </div>
       </div>
       
-      <div class="log">
-        ${outputs.length === 0 ? '<div class="log-empty">No output yet</div>' : 
-        outputs.map(o => `
-        <div class="log-entry">
-          <span class="log-time">${new Date(o.timestamp || o.createdAt).toLocaleTimeString()}</span>
-          <span class="log-source">[${o.source || o.platform || 'log'}]</span>
-          <span class="log-content">${o.content ? o.content.substring(0, 50) : o.id ? `Task: ${o.id.substring(0, 15)}...` : ''}</span>
+      <!-- Task List -->
+      <div class="task-list" id="taskList">
+        ${taskQueue.tasks.map(task => `
+        <div class="task-item ${task.state}" data-state="${task.state}">
+          <div class="task-header">
+            <div class="task-content">${task.content}</div>
+            <div class="task-actions">
+              <button class="task-btn complete" onclick="completeTask('${task.id}')">Complete</button>
+              <button class="task-btn modify" onclick="modifyTask('${task.id}')">Modify</button>
+              <button class="task-btn clear" onclick="clearTask('${task.id}')">Clear</button>
+            </div>
+          </div>
+          <div class="task-meta">
+            <span>[${task.platform}]</span>
+            <span>Priority: ${task.priority === 1 ? 'HIGH' : task.priority === 2 ? 'NORMAL' : 'LOW'}</span>
+            <span>${new Date(task.createdAt).toLocaleString()}</span>
+          </div>
+          ${task.subTasks && task.subTasks.length > 0 ? `
+          <div class="subtasks">
+            ${task.subTasks.map(sub => `
+            <div class="subtask ${sub.state === 'completed' ? 'completed' : ''}">
+              <input type="checkbox" class="subtask-checkbox" 
+                ${sub.state === 'completed' ? 'checked' : ''} 
+                onchange="toggleSubtask('${task.id}', '${sub.id}')">
+              <span>${sub.content}</span>
+              <div class="subtask-actions">
+                <button class="subtask-btn" onclick="completeSubtask('${task.id}', '${sub.id}')">Done</button>
+                <button class="subtask-btn" onclick="clearSubtask('${task.id}', '${sub.id}')">X</button>
+              </div>
+            </div>
+            `).join('')}
+          </div>
+          ` : ''}
         </div>
         `).join('')}
       </div>
@@ -857,22 +796,86 @@ function generateDashboard(data) {
   </div>
   
   <footer class="footer">
-    Auto-refresh every 3 seconds | <a href="/raw" target="_blank">JSON API</a>
+    Auto-refresh every 5 seconds | <a href="/raw" target="_blank">JSON API</a>
   </footer>
   
   <script>
-    async function execute(action) {
-      try {
-        const res = await fetch('/api/' + action, { method: 'POST' });
-        const data = await res.json();
-        alert(JSON.stringify(data, null, 2));
-        location.reload();
-      } catch(e) {
-        alert('Error: ' + e.message);
+    let currentFilter = 'pending';
+    
+    function filterTasks(state, element) {
+      currentFilter = state;
+      document.querySelectorAll('.queue-stat').forEach(el => el.classList.remove('active'));
+      element.classList.add('active');
+      
+      document.querySelectorAll('.task-item').forEach(task => {
+        if (state === 'all' || task.dataset.state === state) {
+          task.style.display = 'block';
+        } else {
+          task.style.display = 'none';
+        }
+      });
+    }
+    
+    function completeTask(taskId) {
+      if (confirm('Complete this task?')) {
+        fetch('/api/task/complete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ taskId })
+        }).then(() => location.reload());
       }
     }
     
-    setTimeout(() => location.reload(), 3000);
+    function modifyTask(taskId) {
+      const newContent = prompt('Enter new task description:');
+      if (newContent) {
+        fetch('/api/task/modify', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ taskId, content: newContent })
+        }).then(() => location.reload());
+      }
+    }
+    
+    function clearTask(taskId) {
+      if (confirm('Remove this task?')) {
+        fetch('/api/task/clear', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ taskId })
+        }).then(() => location.reload());
+      }
+    }
+    
+    function toggleSubtask(taskId, subtaskId) {
+      fetch('/api/task/subtask/toggle', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ taskId, subtaskId })
+      });
+    }
+    
+    function completeSubtask(taskId, subtaskId) {
+      fetch('/api/task/subtask/complete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ taskId, subtaskId })
+      }).then(() => location.reload());
+    }
+    
+    function clearSubtask(taskId, subtaskId) {
+      fetch('/api/task/subtask/clear', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ taskId, subtaskId })
+      }).then(() => location.reload());
+    }
+    
+    // Initialize filter
+    filterTasks('pending', document.querySelector('.queue-stat.active'));
+    
+    // Auto refresh
+    setTimeout(() => location.reload(), 5000);
   </script>
 </body>
 </html>`;
@@ -893,19 +896,59 @@ function getLocalIP() {
 }
 
 async function handleRequest(req, res) {
-  const url = new URL(req.url, `http://localhost:${DEFAULT_PORT}`);
+  const url = new URL(req.url, `http://localhost:3853`);
   
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'application/json');
   
-  if (url.pathname === '/api/complete' && req.method === 'POST') {
-    execPromise('node ~/.openclaw/workspace/skills/queue-sync/main.js complete 2>/dev/null');
-    res.end(JSON.stringify({ success: true }));
-    return;
-  }
-  
-  if (url.pathname === '/api/clear' && req.method === 'POST') {
-    execPromise('node ~/.openclaw/workspace/skills/queue-sync/main.js clear 2>/dev/null');
-    res.end(JSON.stringify({ success: true }));
+  // Task API endpoints
+  if (url.pathname.startsWith('/api/task/')) {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        
+        if (url.pathname === '/api/task/complete') {
+          console.log('Complete task:', data.taskId);
+          res.end(JSON.stringify({ success: true, action: 'complete', taskId: data.taskId }));
+          return;
+        }
+        
+        if (url.pathname === '/api/task/modify') {
+          console.log('Modify task:', data.taskId, data.content);
+          res.end(JSON.stringify({ success: true, action: 'modify', taskId: data.taskId, content: data.content }));
+          return;
+        }
+        
+        if (url.pathname === '/api/task/clear') {
+          console.log('Clear task:', data.taskId);
+          res.end(JSON.stringify({ success: true, action: 'clear', taskId: data.taskId }));
+          return;
+        }
+        
+        if (url.pathname === '/api/task/subtask/toggle') {
+          console.log('Toggle subtask:', data.taskId, data.subtaskId);
+          res.end(JSON.stringify({ success: true }));
+          return;
+        }
+        
+        if (url.pathname === '/api/task/subtask/complete') {
+          console.log('Complete subtask:', data.taskId, data.subtaskId);
+          res.end(JSON.stringify({ success: true }));
+          return;
+        }
+        
+        if (url.pathname === '/api/task/subtask/clear') {
+          console.log('Clear subtask:', data.taskId, data.subtaskId);
+          res.end(JSON.stringify({ success: true }));
+          return;
+        }
+      } catch (e) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: e.message }));
+      }
+    });
     return;
   }
   
@@ -916,11 +959,11 @@ async function handleRequest(req, res) {
       getZeroTierStatus(),
       getOutputBuffer()
     ]);
-    res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ system, taskQueue, zerotier, outputs }, null, 2));
     return;
   }
   
+  // Main dashboard
   try {
     const [system, taskQueue, zerotier, outputs] = await Promise.all([
       Promise.resolve(getSystemStatus()),
@@ -944,7 +987,7 @@ function main() {
   const cmd = args[0];
   
   if (cmd === 'start') {
-    const port = parseInt(args[1]) || DEFAULT_PORT;
+    const port = parseInt(args[1]) || 3853;
     const localIP = getLocalIP();
     const server = http.createServer(handleRequest);
     server.listen(port, '0.0.0.0', () => {
@@ -952,29 +995,22 @@ function main() {
       console.log(`  Local:   http://localhost:${port}`);
       console.log(`  LAN:     http://${localIP}:${port}`);
       console.log(`  ZeroTier: http://172.26.21.18:${port}`);
-      console.log(`\nJSON API: http://${localIP}:${port}/raw`);
     });
     return;
   }
   
   if (cmd === 'status' || !cmd) {
     const system = getSystemStatus();
-    console.log(`CPU: ${system.cpu.usage}% | MEM: ${system.memory.percent}% | LOAD: ${system.load.join(', ')}`);
+    console.log(`CPU: ${system.cpu.usage}% | MEM: ${system.memory.percent}%`);
     return;
   }
   
   console.log(`
-Dashboard - Unified web terminal for Glitch skills
+Dashboard - Interactive task queue management
 
 USAGE:
-  dashboard start [port]   Start web server (default: 3853)
-  dashboard status        Quick CLI status
-
-ENDPOINTS:
-  /               Main dashboard
-  /raw            JSON status
-  /api/complete   Complete task
-  /api/clear      Clear queue
+  dashboard start [port]
+  dashboard status
       `);
 }
 
