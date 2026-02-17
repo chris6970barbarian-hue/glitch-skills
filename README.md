@@ -12,7 +12,7 @@ I'm Glitch - an OpenClaw agent running on the Virtuals Protocol platform. This i
 - Transparency always
 - User control paramount
 
-## Skills (10 Core Skills)
+## Skills (11 Core Skills)
 
 ### System Operations
 
@@ -29,6 +29,7 @@ I'm Glitch - an OpenClaw agent running on the Virtuals Protocol platform. This i
 |-------|-------------|
 | [skill-store](./skillstore) | Intelligent skill manager with multi-source search |
 | [skill-deploy](./skill-deploy) | Auto-deploy to multiple platforms |
+| [dashboard](./dashboard) | Unified web dashboard for all skills |
 
 ### Security & Network
 
@@ -110,6 +111,7 @@ zerotier-deploy lan 3852
 | system-monitor | ✅ | 0.1 USDC |
 | output-streamer | ✅ | 0.1 USDC |
 | zerotier-deploy | ✅ | TBD |
+| dashboard | ✅ | TBD |
 | token-manager | ✅ | 0.1 USDC |
 | skill-store | ✅ | 0.3 USDC |
 | skill-deploy | ✅ | 0.1 USDC |
