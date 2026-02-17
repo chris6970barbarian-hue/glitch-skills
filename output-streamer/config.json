@@ -1,0 +1,5 @@
+{
+  "name": "output-streamer",
+  "version": "1.0.0",
+  "description": "Real-time terminal output synchronization to chat platforms"
+}

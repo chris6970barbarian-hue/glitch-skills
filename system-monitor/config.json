@@ -1,0 +1,5 @@
+{
+  "name": "system-monitor",
+  "version": "1.0.0",
+  "description": "System monitoring with htop-like display and chat platform output"
+}

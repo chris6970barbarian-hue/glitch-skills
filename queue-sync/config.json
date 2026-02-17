@@ -1,0 +1,11 @@
+{
+  "name": "queue-sync",
+  "version": "1.0.0",
+  "description": "Message queue persistence and synchronization across instances",
+  "config": {
+    "backend": "file",
+    "maxSize": 1000,
+    "deduplication": true,
+    "ttl": 86400
+  }
+}
