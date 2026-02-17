@@ -426,6 +426,18 @@ function generateDashboard(data) {
 
 // ============ Server ============
 
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '0.0.0.0';
+}
+
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${DEFAULT_PORT}`);
   
@@ -482,10 +494,14 @@ function main() {
   
   if (cmd === 'start') {
     const port = parseInt(args[1]) || DEFAULT_PORT;
+    const localIP = getLocalIP();
     const server = http.createServer(handleRequest);
-    server.listen(port, () => {
-      console.log(`Dashboard: http://localhost:${port}`);
-      console.log(`JSON API: http://localhost:${port}/raw`);
+    server.listen(port, '0.0.0.0', () => {
+      console.log(`Dashboard running:`);
+      console.log(`  Local:   http://localhost:${port}`);
+      console.log(`  LAN:     http://${localIP}:${port}`);
+      console.log(`  ZeroTier: http://172.26.21.18:${port}`);
+      console.log(`\nJSON API: http://${localIP}:${port}/raw`);
     });
     return;
   }
