@@ -503,12 +503,15 @@ function generateDashboard(data, activePage = 'overview') {
     
     // Check URL on load
     const params = new URLSearchParams(window.location.search);
-    const page = params.get('page') || 'overview';
-    if(page !== 'overview') {
+    const currentPage = params.get('page') || 'overview';
+    if(currentPage !== 'overview') {
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.getElementById('page-'+page)?.classList.add('active');
-      document.querySelector('.nav-item:nth-child(${page==='zerotier'?2:page==='tasks'?3:page==='tokens'?4:page==='system'?5:page==='output'?6:1})')?.classList.add('active');
+      document.getElementById('page-'+currentPage)?.classList.add('active');
+      document.querySelectorAll('.nav-item').forEach((n, i) => {
+        const idx = {zerotier:1,tasks:2,tokens:3,system:4,output:5}[currentPage];
+        if(i+1 === idx+1) n.classList.add('active');
+      });
     }
     
     // Auto refresh
