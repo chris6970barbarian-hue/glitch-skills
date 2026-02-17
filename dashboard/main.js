@@ -1,10 +1,6 @@
 #!/usr/bin/env node
 /**
- * Glitch Dashboard v3.1 - Real Data Integration
- * - Auto-refresh every 30 seconds
- * - Real task edit/delete/complete (via API)
- * - Tokens from openclaw.json
- * - Logs from gateway/cron
+ * Glitch Dashboard v3.2 - Fixed IP Detection
  */
 
 const http=require('http'),fs=require('fs'),path=require('path'),{exec}=require('child_process'),os=require('os');
@@ -21,14 +17,11 @@ async function execCmd(cmd,t=3000){
   });
 }
 
-// Read tokens from openclaw.json
 function getTokens(){
   try{
     if(!fs.existsSync(CONFIG_FILE))return[];
     const cfg=JSON.parse(fs.readFileSync(CONFIG_FILE,'utf8'));
     const tokens=[];
-    
-    // Extract provider API keys
     const providers=cfg.models?.providers||{};
     for(const[p,data]of Object.entries(providers)){
       if(data.apiKey&&data.apiKey!=='minimax-oauth'){
@@ -40,12 +33,8 @@ function getTokens(){
   }catch(e){return[];}
 }
 
-// Read system/gateway logs
 async function getLogs(){
   const logs=[];
-  const now=Date.now();
-  
-  // Try gateway journal logs
   const journal=await execCmd('journalctl --user-unit openclaw-gateway --no-pager -n 30 2>/dev/null');
   if(journal.out){
     const lines=journal.out.split('\n').slice(0,15);
@@ -57,8 +46,6 @@ async function getLogs(){
       }
     }
   }
-  
-  // Try syslog for cron/system
   const syslog=await execCmd('tail -30 /var/log/syslog 2>/dev/null || tail -30 /var/log/messages 2>/dev/null');
   if(syslog.out){
     const lines=syslog.out.split('\n').slice(0,10);
@@ -70,47 +57,49 @@ async function getLogs(){
       }
     }
   }
-  
-  // If no logs found, add placeholder
-  if(logs.length===0){
-    logs.push({t:new Date().toISOString(),s:'system',m:'No gateway/cron logs found - check journalctl'});
-  }
-  
+  if(logs.length===0)logs.push({t:new Date().toISOString(),s:'system',m:'No gateway/cron logs found'});
   return logs.slice(0,20);
 }
 
-// Get task queue from file
 function getTasks(){
   const queueFile=path.join(DATA_DIR,'queue.json');
-  try{
-    if(fs.existsSync(queueFile)){
-      const data=JSON.parse(fs.readFileSync(queueFile,'utf8'));
-      return data.tasks||[];
-    }
-  }catch(e){}
+  try{if(fs.existsSync(queueFile)){const data=JSON.parse(fs.readFileSync(queueFile,'utf8'));return data.tasks||[];}}catch(e){}
   return[];
 }
 
-// Save tasks to file
 function saveTasks(tasks){
   const queueFile=path.join(DATA_DIR,'queue.json');
-  try{
-    fs.writeFileSync(queueFile,JSON.stringify({tasks,updatedAt:new Date().toISOString()},null,2));
-    return true;
-  }catch(e){return false;}
+  try{fs.writeFileSync(queueFile,JSON.stringify({tasks,updatedAt:new Date().toISOString()},null,2));return true;}catch(e){return false;}
+}
+
+// Get network info - properly detect LAN vs ZeroTier
+function getNetworkInfo(){
+  let lanIp='',ztIp='',ztAddr='?';
+  const ifs=os.networkInterfaces();
+  for(const name in ifs){
+    for(const i of ifs[name]){
+      if(i.family==='IPv4'&&!i.internal){
+        // LAN: 192.168.x.x, 10.x.x.x, 172.16-31.x.x (not 172.26.x.x which is ZT)
+        if(i.address.startsWith('192.168.')||i.address.startsWith('10.')||(i.address.startsWith('172.')&&!i.address.startsWith('172.26')&&!i.address.startsWith('172.17'))){
+          if(!lanIp)lanIp=i.address;
+        }
+        // ZeroTier: 172.26.x.x
+        if(i.address.startsWith('172.26.'))ztIp=i.address;
+      }
+    }
+  }
+  return{lanIp,ztIp};
 }
 
 async function getData(){
-  const[sys,zt,mihomo,tokens,tasks,logs]=await Promise.all([
+  const[sys,zt,mihomo,tokens,tasks,logs,netInfo]=await Promise.all([
     (async()=>{
       const cpus=os.cpus();let ti=0,tt=0;
       for(const c of cpus){for(const k in c.times)tt+=c.times[k];ti+=c.times.idle}
       const u=100-ti/tt*100,mb=b=>b>1e9?(b/1e9).toFixed(1)+'GB':(b/1e6|0)+'MB';
       const tm=os.totalmem(),fm=os.freemem();
-      let ip='';
-      for(const n of Object.values(os.networkInterfaces()))
-        for(const i of n)if(i.family==='IPv4'&&!i.internal){ip=i.address;break}
-      return{cpu:{use:u.toFixed(1),n:cpus.length},mem:{pct:((tm-fm)/tm*100).toFixed(1),used:mb(tm-fm),tot:mb(tm)},up:os.uptime(),host:os.hostname(),plat:PLATFORM,arch:os.arch(),ip}
+      const net=getNetworkInfo();
+      return{cpu:{use:u.toFixed(1),n:cpus.length},mem:{pct:((tm-fm)/tm*100).toFixed(1),used:mb(tm-fm),tot:mb(tm)},up:os.uptime(),host:os.hostname(),plat:PLATFORM,arch:os.arch(),lanIp:net.lanIp,ztIp:net.ztIp};
     })(),
     (async()=>{
       const cmd=isWin?'"C:\\Program Files (x86)\\ZeroTier\\One\\zerotier-cli.exe"':isMac?'/usr/local/bin/zerotier-cli':'zerotier-cli';
@@ -119,7 +108,7 @@ async function getData(){
       return{on:!n.err&&n.out.includes('OK'),addr:i.out.match(/([a-f0-9]{10})/)?.[1]||'?',ip:m?.[1]||'Not connected',net:id?.[1]||null}
     })(),
     (async()=>{return{run:(await execCmd(isWin?'tasklist /FI "IMAGENAME eq mihomo.exe"':'pgrep -f mihomo')).code===0}}),
-    (async()=>{const t=getTokens();return t.length?t:[{name:'No tokens configured',key:'Set up in openclaw.json',enabled:false}]})(),
+    (async()=>{const t=getTokens();return t.length?t:[{name:'No tokens',key:'Configure in openclaw.json',enabled:false}]})(),
     (async()=>{const t=getTasks();return{stats:{p:t.filter(x=>x.st==='pending').length,c:t.filter(x=>x.st==='completed').length},list:t}})(),
     getLogs()
   ]);
@@ -130,6 +119,7 @@ function html(d,p){
   const{sys,zt,mihomo,tokens,tasks,logs,plat}=d;
   const col=v=>v>80?'#a06060':v>50?'#a09060':'#609060';
   const colT=s=>s==='completed'?'#609060':s==='processing'?'#5c8cb0':'#a09060';
+  const lanIp=sys.lanIp||sys.ztIp||'N/A';
   
   return`<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -194,7 +184,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <div class="grid">
 <div class="grid-item" onclick="go('system')"><div class="grid-val" style="color:${col(parseFloat(sys.cpu.use))}">${sys.cpu.use}%</div><div class="grid-lab">CPU Usage</div></div>
 <div class="grid-item" onclick="go('system')"><div class="grid-val" style="color:${col(parseFloat(sys.mem.pct))}">${sys.mem.pct}%</div><div class="grid-lab">Memory</div></div>
-<div class="grid-item" onclick="go('network')"><div class="grid-val" style="color:var(--ac)">${zt.ip.split('.')[3]||'--'}</div><div class="grid-lab">ZeroTier IP</div></div>
+<div class="grid-item" onclick="go('network')"><div class="grid-val" style="color:var(--ac)">${sys.ztIp.split('.')[3]||'--'}</div><div class="grid-lab">ZeroTier IP</div></div>
 <div class="grid-item" onclick="go('tasks')"><div class="grid-val" style="color:var(--yl)">${tasks.stats.p}</div><div class="grid-lab">Pending Tasks</div></div>
 <div class="grid-item"><div class="grid-val" style="color:var(--gr)">${mihomo.run?'ON':'OFF'}</div><div class="grid-lab">Mihomo</div></div>
 <div class="grid-item"><div class="grid-val" style="color:var(--ac)">${tokens.length}</div><div class="grid-lab">Tokens</div></div>
@@ -217,9 +207,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 </div></div>
 
 <div class="pg ${p==='network'?'act':''}" id="network">
-<div class="card"><div class="card-tit"><div class="ic ic-n">🌐</div>ZeroTier Network</div>
+<div class="card"><div class="card-tit"><div class="ic ic-n">🌐</div>Network</div>
 <div style="background:var(--ch);border-radius:10px;padding:24px;text-align:center;margin:12px 0"><div style="font-size:12px;color:var(--tm);margin-bottom:8px">ZeroTier Virtual IP</div><div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:600;color:var(--ac)">${zt.ip}</div></div>
-<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">Physical IP</div><div style="font-size:14px;font-weight:500;margin-top:4px">${sys.ip}</div></div><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">ZT Address</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;margin-top:4px">${zt.addr}</div></div></div>
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">LAN IP (Physical)</div><div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;margin-top:4px">${sys.lanIp}</div></div><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">ZT Address</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;margin-top:4px">${zt.addr}</div></div></div>
 </div></div>
 
 <div class="pg ${p==='tasks'?'act':''}" id="tasks">
@@ -228,7 +218,7 @@ ${tasks.list.length?tasks.list.map(t=>`<div class="task ${t.st}"><div class="tas
 </div></div>
 
 <div class="pg ${p==='tokens'?'act':''}" id="tokens">
-<div class="card"><div class="card-tit"><div class="ic ic-x">🔑</div>API Tokens (from openclaw.json)</div>
+<div class="card"><div class="card-tit"><div class="ic ic-x">🔑</div>API Tokens</div>
 ${tokens.map(t=>`<div class="tok"><div><div class="tok-n">${t.name}</div><div class="tok-k">${t.key}</div></div><div style="font-size:12px;color:var(--tm)">${t.baseUrl||''}</div><label class="tog"><input type="checkbox" ${t.enabled?'checked':''} disabled><span class="tog-sl"></span></label></div>`).join('')}
 <div class="gw"><div class="gw-l">Gateway Token</div><div class="gw-v">${fs.existsSync('/home/crix/.openclaw/openclaw.json')?JSON.parse(fs.readFileSync('/home/crix/.openclaw/openclaw.json','utf8')).gateway?.auth?.token?.substring(0,12)+'...':'Not configured'}</div></div>
 </div></div>
@@ -240,7 +230,6 @@ ${logs.map(l=>`<div class="log"><span class="log-t">${l.t.substring(0,16)}</span
 
 </main>
 
-<!-- Edit Modal -->
 <div class="edit-modal" id="editModal" onclick="if(event.target===this)this.style.display='none'">
 <div class="edit-box">
 <h3 id="editTitle">Edit Task</h3>
@@ -255,34 +244,12 @@ ${logs.map(l=>`<div class="log"><span class="log-t">${l.t.substring(0,16)}</span
 let tasks=${JSON.stringify(tasks.list)};
 function go(p){sessionStorage.setItem('page',p);location.href='?page='+p}
 const s=sessionStorage.getItem('page');if(s&&s!=='${p}'){document.querySelectorAll('.pg').forEach(x=>x.classList.remove('act'));document.getElementById(s)?.classList.add('act')}
-function taskAct(action,id){
-  fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,id})}).then(()=>location.reload());
-}
-function showEdit(id,content,pr){
-  document.getElementById('editId').value=id;
-  document.getElementById('editContent').value=content;
-  document.getElementById('editPriority').value=pr;
-  document.getElementById('editTitle').textContent='Edit Task';
-  document.getElementById('editModal').style.display='flex';
-}
-function showAdd(){
-  document.getElementById('editId').value='';
-  document.getElementById('editContent').value='';
-  document.getElementById('editPriority').value='1';
-  document.getElementById('editTitle').textContent='Add Task';
-  document.getElementById('editModal').style.display='flex';
-}
-function saveEdit(){
-  const id=document.getElementById('editId').value;
-  const content=document.getElementById('editContent').value;
-  const priority=parseInt(document.getElementById('editPriority').value);
-  fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:id?'update':'add',id:id?parseInt(id):null,content,priority})}).then(()=>location.reload());
-}
-function subtask(taskId,idx){
-  fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'subtask',taskId,idx})}).then(()=>location.reload());
-}
+function taskAct(action,id){fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,id})}).then(()=>location.reload());}
+function showEdit(id,content,pr){document.getElementById('editId').value=id;document.getElementById('editContent').value=content;document.getElementById('editPriority').value=pr;document.getElementById('editTitle').textContent='Edit Task';document.getElementById('editModal').style.display='flex';}
+function showAdd(){document.getElementById('editId').value='';document.getElementById('editContent').value='';document.getElementById('editPriority').value='1';document.getElementById('editTitle').textContent='Add Task';document.getElementById('editModal').style.display='flex';}
+function saveEdit(){const id=document.getElementById('editId').value;const content=document.getElementById('editContent').value;const priority=parseInt(document.getElementById('editPriority').value);fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:id?'update':'add',id:id?parseInt(id):null,content,priority})}).then(()=>location.reload());}
+function subtask(taskId,idx){fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'subtask',taskId,idx})}).then(()=>location.reload());}
 function loadLogs(){location.reload();}
-// Auto-refresh every 30 seconds
 setTimeout(()=>location.reload(),30000);
 </script></body></html>`;
 }
@@ -292,40 +259,21 @@ const server=http.createServer(async(req,res)=>{
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers','Content-Type');
-  
   if(req.method==='OPTIONS'){res.end();return;}
-  
   if(u.pathname==='/api/task'){
-    let body='';req.on('data',c=>body+=c);req.on('end',()=>{
+    let body='';req.on('data',c=>body+=c);req.on('end',() => {
       try{
         const d=JSON.parse(body);
         const tasks=getTasks();
-        
-        if(d.action==='add'){
-          const newTask={id:Date.now(),t:d.content,st:'pending',pr:d.priority||1,sub:[]};
-          tasks.push(newTask);
-          saveTasks(tasks);
-        }else if(d.action==='complete'){
-          const idx=tasks.findIndex(t=>t.id==d.id);
-          if(idx>-1){tasks[idx].st='completed';saveTasks(tasks);}
-        }else if(d.action==='delete'){
-          const idx=tasks.findIndex(t=>t.id==d.id);
-          if(idx>-1){tasks.splice(idx,1);saveTasks(tasks);}
-        }else if(d.action==='update'){
-          const idx=tasks.findIndex(t=>t.id==d.id);
-          if(idx>-1){tasks[idx].t=d.content;tasks[idx].pr=d.priority;saveTasks(tasks);}
-        }else if(d.action==='subtask'){
-          const idx=tasks.findIndex(t=>t.id==d.taskId);
-          if(idx>-1&&tasks[idx].sub&&tasks[idx].sub[d.idx]){
-            tasks[idx].sub[d.idx].s=!tasks[idx].sub[d.idx].s;
-            saveTasks(tasks);
-          }
-        }
+        if(d.action==='add'){const newTask={id:Date.now(),t:d.content,st:'pending',pr:d.priority||1,sub:[]};tasks.push(newTask);saveTasks(tasks);}
+        else if(d.action==='complete'){const idx=tasks.findIndex(t=>t.id==d.id);if(idx>-1){tasks[idx].st='completed';saveTasks(tasks);}}
+        else if(d.action==='delete'){const idx=tasks.findIndex(t=>t.id==d.id);if(idx>-1){tasks.splice(idx,1);saveTasks(tasks);}}
+        else if(d.action==='update'){const idx=tasks.findIndex(t=>t.id==d.id);if(idx>-1){tasks[idx].t=d.content;tasks[idx].pr=d.priority;saveTasks(tasks);}}
+        else if(d.action==='subtask'){const idx=tasks.findIndex(t=>t.id==d.taskId);if(idx>-1&&tasks[idx].sub&&tasks[idx].sub[d.idx]){tasks[idx].sub[d.idx].s=!tasks[idx].sub[d.idx].s;saveTasks(tasks);}}
         res.end('ok');
       }catch(e){res.end('error:'+e.message);}
     });return;
   }
-  
   const p=u.searchParams.get('page')||'overview';
   const d=await getData();
   res.setHeader('Content-Type','text/html;charset=utf-8');
@@ -334,9 +282,8 @@ const server=http.createServer(async(req,res)=>{
 
 server.listen(PORT,'0.0.0.0',()=>{
   const ip=Object.values(os.networkInterfaces()).flat().find(i=>i.family==='IPv4'&&!i.internal)?.address||'0.0.0.0';
-  console.log(`Glitch Dashboard v3.1`);
+  console.log(`Glitch Dashboard v3.2`);
   console.log(`Platform: ${PLATFORM}`);
   console.log(`URL: http://localhost:${PORT}`);
   console.log(`LAN: http://${ip}:${PORT}`);
-  console.log(`Auto-refresh: 30s`);
 });
