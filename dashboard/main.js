@@ -290,7 +290,7 @@ function generateDashboard(data) {
     /* Grid */
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 24px;
     }
     
@@ -651,7 +651,7 @@ function generateDashboard(data) {
       <div class="logo-icon">G</div>
       <div class="logo-text">
         <h1>Glitch Dashboard</h1>
-        <span>Task Queue + System Monitor + ZeroTier</span>
+        
       </div>
     </div>
     <div class="header-right">
