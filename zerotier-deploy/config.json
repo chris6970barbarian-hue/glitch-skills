@@ -1,0 +1,12 @@
+{
+  "name": "zerotier-deploy",
+  "version": "1.0.0",
+  "description": "Auto-deploy ZeroTier + LAN sharing page",
+  "config": {
+    "networkId": "",
+    "apiKey": "",
+    "lanPort": 3852,
+    "autoStart": false,
+    "installDependencies": true
+  }
+}
