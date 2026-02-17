@@ -224,7 +224,7 @@ ${tasks.list.length?tasks.list.map(t=>`<div class="task ${t.st}"><div class="tas
 <div class="pg ${p==='tokens'?'act':''}" id="tokens">
 <div class="card"><div class="card-tit"><div class="ic ic-x">🔑</div>API Tokens</div>
 ${tokens.map(t=>`<div class="tok"><div><div class="tok-n">${t.name}</div><div class="tok-k">${t.key}</div></div><div style="font-size:12px;color:var(--tm)">${t.baseUrl||''}</div><label class="tog"><input type="checkbox" ${t.enabled?'checked':''} disabled><span class="tog-sl"></span></label></div>`).join('')}
-<div class="gw"><div class="gw-l">Gateway Token</div><div class="gw-v">${fs.existsSync('/home/crix/.openclaw/openclaw.json')?JSON.parse(fs.readFileSync('/home/crix/.openclaw/openclaw.json','utf8')).gateway?.auth?.token?.substring(0,12)+'...':'Not configured'}</div></div>
+<div class="gw"><div class="gw-l">Gateway Token</div><div class="gw-v">${(()=>{try{const cf=path.join(os.homedir(),'.openclaw','openclaw.json');return fs.existsSync(cf)?JSON.parse(fs.readFileSync(cf,'utf8')).gateway?.auth?.token?.substring(0,12)+'...':'Not configured'}catch(e){return'Error'}})()}</div></div>
 </div></div>
 
 <div class="pg ${p==='logs'?'act':''}" id="logs">
