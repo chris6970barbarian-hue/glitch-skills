@@ -1,0 +1,18 @@
+{
+  "github": {
+    "token": "",
+    "repo": ""
+  },
+  "clawhub": {
+    "token": ""
+  },
+  "agdp": {
+    "apiKey": "",
+    "agentId": "",
+    "wallet": ""
+  },
+  "awesomeList": {
+    "owner": "",
+    "repo": "VoltAgent/awesome-openclaw-skills"
+  }
+}
