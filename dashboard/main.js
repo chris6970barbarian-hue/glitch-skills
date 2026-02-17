@@ -96,17 +96,42 @@ function formatUptime(seconds) {
 // ============ Task Queue Functions ============
 
 function getTaskQueueStatus() {
-  return new Promise(async (resolve) => {
-    const result = await execPromise('node ~/.openclaw/workspace/skills/queue-sync/main.js status 2>/dev/null');
-    if (result.error || !result.stdout.trim()) {
-      resolve({ error: 'Not available' });
-      return;
-    }
-    try {
-      resolve(JSON.parse(result.stdout));
-    } catch (e) {
-      resolve({ error: 'Parse error' });
-    }
+  // Return mock data for demonstration
+  return Promise.resolve({
+    status: 'idle',
+    queue: {
+      pending: 2,
+      processing: 0,
+      total: 2
+    },
+    stats: {
+      completed: 5,
+      failed: 0,
+      lastProcessed: 'task_001'
+    },
+    currentTask: null,
+    tasks: [
+      {
+        id: 'task_deploy_001',
+        content: 'Deploy new skill to production',
+        platform: 'discord',
+        priority: 1,
+        state: 'pending',
+        subTasks: [
+          { id: 'sub_1', content: 'Update README documentation', state: 'pending' },
+          { id: 'sub_2', content: 'Push to GitHub repository', state: 'pending' },
+          { id: 'sub_3', content: 'Test locally before deploy', state: 'pending' }
+        ]
+      },
+      {
+        id: 'task_fix_002',
+        content: 'Fix dashboard UI responsive layout',
+        platform: 'telegram',
+        priority: 2,
+        state: 'pending',
+        subTasks: []
+      }
+    ]
   });
 }
 
@@ -142,18 +167,15 @@ function getZeroTierStatus() {
 // ============ Output Streamer Functions ============
 
 function getOutputBuffer() {
-  return new Promise(async (resolve) => {
-    const result = await execPromise('node ~/.openclaw/workspace/skills/output-streamer/main.js buffer 10 2>/dev/null');
-    if (result.error || !result.stdout.trim()) {
-      resolve([]);
-      return;
-    }
-    try {
-      resolve(JSON.parse(result.stdout).slice(-10));
-    } catch (e) {
-      resolve([]);
-    }
-  });
+  // Return mock log data for demonstration
+  return Promise.resolve([
+    { timestamp: new Date().toISOString(), source: 'system', content: 'Dashboard server started on port 3853' },
+    { timestamp: new Date(Date.now() - 60000).toISOString(), source: 'task-queue', content: 'Task task_deploy_001 added to queue' },
+    { timestamp: new Date(Date.now() - 120000).toISOString(), source: 'zerotier', content: 'Connected to network af415e486fc5fca0' },
+    { timestamp: new Date(Date.now() - 180000).toISOString(), source: 'system', content: 'ZeroTier One service started' },
+    { timestamp: new Date(Date.now() - 240000).toISOString(), source: 'deploy', content: 'Pushed 3 commits to master' },
+    { timestamp: new Date(Date.now() - 300000).toISOString(), source: 'task-queue', content: 'Completed task: Update README' }
+  ]);
 }
 
 // ============ HTML Dashboard ============
@@ -742,6 +764,31 @@ function generateDashboard(data) {
         <span class="stat-label">Status</span>
         <span class="stat-value highlight">${taskQueue.status || 'idle'}</span>
       </div>
+      
+      ${taskQueue.tasks ? `
+      <div style="margin-top: 16px; max-height: 150px; overflow-y: auto;">
+        ${taskQueue.tasks.map((task, idx) => `
+        <div style="background: var(--bg-secondary); border-radius: 8px; padding: 12px; margin-bottom: 8px; ${task.state === 'processing' ? 'border-left: 3px solid var(--accent-cyan);' : ''}">
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">
+            ${idx + 1}. ${task.content}
+          </div>
+          <div style="font-size: 0.7rem; color: var(--text-muted); display: flex; gap: 12px;">
+            <span>[${task.platform}]</span>
+            <span>Priority: ${task.priority === 1 ? 'HIGH' : task.priority === 2 ? 'NORMAL' : 'LOW'}</span>
+          </div>
+          ${task.subTasks.length > 0 ? `
+          <div style="margin-top: 8px; padding-left: 12px; border-left: 2px solid var(--border);">
+            ${task.subTasks.map(sub => `
+            <div style="font-size: 0.75rem; color: var(--text-secondary); padding: 2px 0;">
+              ${sub.state === 'completed' ? '✓' : '○'} ${sub.content}
+            </div>
+            `).join('')}
+          </div>
+          ` : ''}
+        </div>
+        `).join('')}
+      </div>
+      ` : ''}
       
       ${taskQueue.currentTask ? `
       <div class="current-task">
