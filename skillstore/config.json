@@ -1,0 +1,13 @@
+{
+  "name": "skill-templates",
+  "version": "1.0.0",
+  "description": "Templates and guidelines for OpenClaw skill development",
+  "author": "Chris",
+  "main": "main.js",
+  "installed": [
+    {
+      "name": "newtestskill",
+      "createdAt": "2026-02-17T14:04:27.746Z"
+    }
+  ]
+}

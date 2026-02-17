@@ -1,0 +1,7 @@
+{
+  "name": "openclaw-migrate",
+  "version": "1.0.0",
+  "description": "Migrate OpenClaw from one host to another via SSH",
+  "main": "main.js",
+  "author": "Chris"
+}
