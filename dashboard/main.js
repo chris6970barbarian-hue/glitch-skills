@@ -102,7 +102,7 @@ async function getData(){
       return{cpu:{use:u.toFixed(1),n:cpus.length},mem:{pct:((tm-fm)/tm*100).toFixed(1),used:mb(tm-fm),tot:mb(tm)},up:os.uptime(),host:os.hostname(),plat:PLATFORM,arch:os.arch(),lanIp:net.lanIp,ztIp:net.ztIp};
     })(),
     (async()=>{
-      const cmd=isWin?'"C:\\Program Files (x86)\\ZeroTier\\One\\zerotier-cli.exe"':isMac?'/usr/local/bin/zerotier-cli':'zerotier-cli';
+      const cmd=isWin?'"C:\\Program Files (x86)\\ZeroTier\\One\\zerotier-cli.exe"':isMac?'/usr/local/bin/zerotier-cli':'sudo zerotier-cli';
       const n=await execCmd(`${cmd} listnetworks`),i=await execCmd(`${cmd} info`);
       const m=n.out.match(/(\d+\.\d+\.\d+\.\d+)/),id=n.out.match(/([a-f0-9]{16})/);
       return{on:!n.err&&n.out.includes('OK'),addr:i.out.match(/([a-f0-9]{10})/)?.[1]||'?',ip:m?.[1]||'Not connected',net:id?.[1]||null}
