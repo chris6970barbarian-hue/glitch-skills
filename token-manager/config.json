@@ -1,0 +1,6 @@
+{
+  "name": "token-manager",
+  "version": "1.0.0",
+  "description": "Centralized token management with web GUI and access control",
+  "port": 3847
+}
