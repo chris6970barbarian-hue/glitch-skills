@@ -207,9 +207,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 </div></div>
 
 <div class="pg ${p==='network'?'act':''}" id="network">
-<div class="card"><div class="card-tit"><div class="ic ic-n">🌐</div>Network</div>
+<div class="card"><div class="card-tit"><div class="ic ic-n">🌐</div>ZeroTier Network</div>
 <div style="background:var(--ch);border-radius:10px;padding:24px;text-align:center;margin:12px 0"><div style="font-size:12px;color:var(--tm);margin-bottom:8px">ZeroTier Virtual IP</div><div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:600;color:var(--ac)">${zt.ip}</div></div>
-<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px"><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">LAN IP (Physical)</div><div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;margin-top:4px">${sys.lanIp}</div></div><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">ZT Address</div><div style="font-family:'JetBrains Mono',monospace;font-size:13px;margin-top:4px">${zt.addr}</div></div></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px"><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">Network ID</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;margin-top:4px">${zt.net||'Not connected'}</div></div><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">ZT Address</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:4px">${zt.addr}</div></div><div style="background:var(--ch);padding:14px;border-radius:8px"><div style="font-size:12px;color:var(--tm)">LAN IP</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:4px">${sys.lanIp}</div></div></div>
+</div>
+<div class="card"><div class="card-tit"><div class="ic ic-n">⚙</div>Network Configuration</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px"><div><div style="font-size:12px;color:var(--tm);margin-bottom:6px">Gateway IP</div><input type="text" id="gatewayIp" placeholder="e.g., 192.168.192.1" style="width:100%;background:var(--ch);border:1px solid var(--b);border-radius:6px;padding:10px;color:var(--t);font-size:14px"></div><div><div style="font-size:12px;color:var(--tm);margin-bottom:6px">DNS Servers</div><input type="text" id="dnsServers" placeholder="e.g., 1.1.1.1, 8.8.8.8" style="width:100%;background:var(--ch);border:1px solid var(--b);border-radius:6px;padding:10px;color:var(--t);font-size:14px"></div></div>
+<div style="display:flex;gap:8px"><button class="btn-sm" onclick="saveNetworkConfig()" style="background:var(--ac);color:#000;padding:8px 16px">Apply Configuration</button><button class="btn-sm" onclick="leaveNetwork()" style="background:var(--rd);color:#fff;padding:8px 16px">Leave Network</button></div>
 </div></div>
 
 <div class="pg ${p==='tasks'?'act':''}" id="tasks">
@@ -250,6 +254,8 @@ function showAdd(){document.getElementById('editId').value='';document.getElemen
 function saveEdit(){const id=document.getElementById('editId').value;const content=document.getElementById('editContent').value;const priority=parseInt(document.getElementById('editPriority').value);fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:id?'update':'add',id:id?parseInt(id):null,content,priority})}).then(()=>location.reload());}
 function subtask(taskId,idx){fetch('/api/task',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'subtask',taskId,idx})}).then(()=>location.reload());}
 function loadLogs(){location.reload();}
+function saveNetworkConfig(){const g=document.getElementById('gatewayIp').value;const d=document.getElementById('dnsServers').value;fetch('/api/network',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gateway:g,dns:d})}).then(()=>alert('Configuration saved'));}
+function leaveNetwork(){if(confirm('Leave ZeroTier network?')){fetch('/api/network',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({leave:true})}).then(()=>alert('Left network - refresh to see changes'));}}
 setTimeout(()=>location.reload(),30000);
 </script></body></html>`;
 }
@@ -271,6 +277,22 @@ const server=http.createServer(async(req,res)=>{
         else if(d.action==='update'){const idx=tasks.findIndex(t=>t.id==d.id);if(idx>-1){tasks[idx].t=d.content;tasks[idx].pr=d.priority;saveTasks(tasks);}}
         else if(d.action==='subtask'){const idx=tasks.findIndex(t=>t.id==d.taskId);if(idx>-1&&tasks[idx].sub&&tasks[idx].sub[d.idx]){tasks[idx].sub[d.idx].s=!tasks[idx].sub[d.idx].s;saveTasks(tasks);}}
         res.end('ok');
+      }catch(e){res.end('error:'+e.message);}
+    });return;
+  }
+  if(u.pathname==='/api/network'){
+    let body='';req.on('data',c=>body+=c);req.on('end',async() => {
+      try{
+        const d=JSON.parse(body);
+        if(d.leave){
+          await execCmd('sudo zerotier-cli leave af415e486fc5fca0');
+          res.end('left');
+        }else if(d.gateway||d.dns){
+          const cfg=path.join(DATA_DIR,'network.json');
+          const current=fs.existsSync(cfg)?JSON.parse(fs.readFileSync(cfg,'utf8')):{};
+          fs.writeFileSync(cfg,JSON.stringify({...current,gateway:d.gateway,dns:d.dns,updatedAt:new Date().toISOString()},null,2));
+          res.end('saved');
+        }else{res.end('ok');}
       }catch(e){res.end('error:'+e.message);}
     });return;
   }
