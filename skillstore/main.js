@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * SkillStore - OpenClaw Skill Manager
- * Intelligent search with semantic matching and threshold filtering
- * Supports: Local, GitHub, ClawHub, AwesomeList searches
+ * SkillStore - OpenClaw Skill Manager with Self-Learning
+ * Intelligent search with semantic matching, duplicate detection, and memory
  */
 
 const fs = require('fs');
@@ -26,36 +25,32 @@ const log = (msg, color = 'reset') => console.log(`${C[color]}${msg}${C.reset}`)
 const err = (msg) => console.error(`${C.red}Error:${C.reset} ${msg}`);
 
 const CONFIG_FILE = path.join(__dirname, 'config.json');
-const MATCH_THRESHOLD = 0.3; // 30% similarity threshold
+const MEMORY_FILE = path.join(__dirname, 'memory.json');
+const MATCH_THRESHOLD = 0.25; // Lowered for better recall
+const LEARN_THRESHOLD = 0.4; // Threshold to auto-learn
 
-// Known skills with detailed descriptions
-const SKILL_DATABASE = [
-  { name: 'homeassistant', desc: 'Control smart home devices like lights switches thermostats via Home Assistant API', keywords: ['home', 'assistant', 'smart', 'homeassistant', 'ha', 'light', 'switch', 'thermostat', 'iot', 'automation'] },
-  { name: 'skillstore', desc: 'Search install and create OpenClaw skills with intelligent matching semantic search threshold filtering', keywords: ['skill', 'store', 'openclaw', 'install', 'search', 'create', 'template', 'manager'] },
-  { name: 'openclaw-migrate', desc: 'Migrate OpenClaw from one host to another via SSH sync config skills memory tokens', keywords: ['migrate', 'openclaw', 'ssh', 'sync', 'migration', 'transfer', 'backup'] },
-  { name: 'skill-deploy', desc: 'Auto-deploy skills to ClawHub AGDP GitHub AwesomeList with one command', keywords: ['deploy', 'publish', 'release', 'automation', 'github', 'clawhub', 'agdp'] },
-  { name: 'openhue', desc: 'Control Philips Hue lights and scenes', keywords: ['hue', 'philips', 'light', 'bulb', 'scene'] },
-  { name: 'blucli', desc: 'Control BluOS speakers and streaming devices', keywords: ['bluos', 'speaker', 'audio', 'music', 'streaming', 'bluetooth'] },
-  { name: 'sonoscli', desc: 'Control Sonos speakers and groups', keywords: ['sonos', 'speaker', 'audio', 'music', 'streaming'] },
-  { name: 'eightctl', desc: 'Control Eight Sleep pods temperature and alarms', keywords: ['eight', 'sleep', 'pod', 'temperature', 'mattress', 'bed'] },
-  { name: 'gog', desc: 'Google Workspace CLI for Gmail Calendar Drive Contacts Sheets Docs', keywords: ['google', 'gmail', 'calendar', 'drive', 'workspace', 'email', 'document'] },
-  { name: 'himalaya', desc: 'Email client via IMAP SMTP terminal', keywords: ['email', 'imap', 'smtp', 'mail', 'terminal'] },
-  { name: 'obsidian', desc: 'Obsidian vault integration and automation', keywords: ['obsidian', 'note', 'markdown', 'vault', 'knowledge'] },
-  { name: 'ordercli', desc: 'Food delivery order management Foodora Deliveroo', keywords: ['food', 'order', 'delivery', 'foodora', 'deliveroo', 'eat'] },
-  { name: 'weather', desc: 'Weather forecasts current temperature conditions', keywords: ['weather', 'forecast', 'temperature', 'rain', 'sun', 'climate'] },
-  { name: 'github', desc: 'GitHub CLI issues pull requests workflows', keywords: ['github', 'git', 'issue', 'pr', 'pull', 'request', 'repo', 'repository'] },
-  { name: 'blogwatcher', desc: 'Monitor RSS Atom feeds for blog updates', keywords: ['blog', 'rss', 'feed', 'monitor', 'watch', 'atom', 'news'] },
-  { name: 'gifgrep', desc: 'Search and download GIFs from providers', keywords: ['gif', 'image', 'search', 'meme', 'animation'] },
-  { name: 'video-frames', desc: 'Extract frames and clips from video files', keywords: ['video', 'frame', 'clip', 'extract', 'ffmpeg'] },
-  { name: 'youtube-summarizer', desc: 'Summarize YouTube video transcripts', keywords: ['youtube', 'video', 'transcript', 'summarize', 'summary'] },
-  { name: 'ga4', desc: 'Google Analytics 4 query and reporting', keywords: ['analytics', 'ga4', 'google', 'traffic', 'pageview', 'metric'] },
-  { name: 'gsc', desc: 'Google Search Console SEO query data', keywords: ['seo', 'search', 'google', 'console', 'ranking', 'clicks'] },
-  { name: 'wacli', desc: 'WhatsApp messaging via CLI send messages', keywords: ['whatsapp', 'wa', 'message', 'send', 'chat'] },
-  { name: 'browser', desc: 'Automate web browser interactions', keywords: ['browser', 'automation', 'web', 'scraping', 'selenium', 'playwright'] },
-  { name: 'healthcheck', desc: 'Security hardening and system monitoring', keywords: ['security', 'hardening', 'monitor', 'health', 'firewall', 'audit'] },
+// Default known skills
+const DEFAULT_SKILLS = [
+  { name: 'homeassistant', desc: 'Control smart home devices like lights switches thermostats via Home Assistant API', keywords: ['home', 'assistant', 'smart', 'homeassistant', 'ha', 'light', 'switch', 'thermostat', 'iot', 'automation'], learned: false },
+  { name: 'skillstore', desc: 'Search install and create OpenClaw skills with intelligent matching semantic search threshold filtering', keywords: ['skill', 'store', 'openclaw', 'install', 'search', 'create', 'template', 'manager'], learned: false },
+  { name: 'openclaw-migrate', desc: 'Migrate OpenClaw from one host to another via SSH sync config skills memory tokens', keywords: ['migrate', 'openclaw', 'ssh', 'sync', 'migration', 'transfer', 'backup'], learned: false },
+  { name: 'skill-deploy', desc: 'Auto-deploy skills to ClawHub AGDP GitHub AwesomeList with one command', keywords: ['deploy', 'publish', 'release', 'automation', 'github', 'clawhub', 'agdp'], learned: false },
+  { name: 'openhue', desc: 'Control Philips Hue lights and scenes', keywords: ['hue', 'philips', 'light', 'bulb', 'scene'], learned: false },
+  { name: 'blucli', desc: 'Control BluOS speakers and streaming devices', keywords: ['bluos', 'speaker', 'audio', 'music', 'streaming', 'bluetooth'], learned: false },
+  { name: 'sonoscli', desc: 'Control Sonos speakers and groups', keywords: ['sonos', 'speaker', 'audio', 'music', 'streaming'], learned: false },
+  { name: 'eightctl', desc: 'Control Eight Sleep pods temperature and alarms', keywords: ['eight', 'sleep', 'pod', 'temperature', 'mattress', 'bed'], learned: false },
+  { name: 'gog', desc: 'Google Workspace CLI for Gmail Calendar Drive Contacts Sheets Docs', keywords: ['google', 'gmail', 'calendar', 'drive', 'workspace', 'email', 'document'], learned: false },
+  { name: 'himalaya', desc: 'Email client via IMAP SMTP terminal', keywords: ['email', 'imap', 'smtp', 'mail', 'terminal'], learned: false },
+  { name: 'obsidian', desc: 'Obsidian vault integration and automation', keywords: ['obsidian', 'note', 'markdown', 'vault', 'knowledge'], learned: false },
+  { name: 'weather', desc: 'Weather forecasts current temperature conditions', keywords: ['weather', 'forecast', 'temperature', 'rain', 'sun', 'climate'], learned: false },
+  { name: 'github', desc: 'GitHub CLI issues pull requests workflows', keywords: ['github', 'git', 'issue', 'pr', 'pull', 'request', 'repo', 'repository'], learned: false },
+  { name: 'ga4', desc: 'Google Analytics 4 query and reporting', keywords: ['analytics', 'ga4', 'google', 'traffic', 'pageview', 'metric'], learned: false },
+  { name: 'gsc', desc: 'Google Search Console SEO query data', keywords: ['seo', 'search', 'google', 'console', 'ranking', 'clicks'], learned: false },
+  { name: 'browser', desc: 'Automate web browser interactions', keywords: ['browser', 'automation', 'web', 'scraping', 'selenium', 'playwright'], learned: false },
+  { name: 'healthcheck', desc: 'Security hardening and system monitoring', keywords: ['security', 'hardening', 'monitor', 'health', 'firewall', 'audit'], learned: false },
 ];
 
-// Load config
+// Load or initialize config
 function loadConfig() {
   if (fs.existsSync(CONFIG_FILE)) {
     return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -65,6 +60,167 @@ function loadConfig() {
 
 function saveConfig(config) {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+// Load or initialize memory (learned skills)
+function loadMemory() {
+  const defaultMemory = {
+    learnedSkills: [],
+    searchHistory: [],
+    installHistory: [],
+    usageCount: {},
+    lastUpdated: new Date().toISOString()
+  };
+  
+  if (fs.existsSync(MEMORY_FILE)) {
+    try {
+      return JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf8'));
+    } catch (e) {
+      return defaultMemory;
+    }
+  }
+  return defaultMemory;
+}
+
+function saveMemory(memory) {
+  memory.lastUpdated = new Date().toISOString();
+  fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
+}
+
+// Learn a new skill from local installation
+function learnFromLocal(skillPath) {
+  const memory = loadMemory();
+  const name = path.basename(skillPath);
+  
+  // Check if already learned
+  if (memory.learnedSkills.find(s => s.name === name)) {
+    return false;
+  }
+  
+  // Extract info from SKILL.md and README.md
+  let content = '';
+  let desc = '';
+  let keywords = [];
+  
+  for (const file of ['SKILL.md', 'README.md', 'main.js']) {
+    const fpath = path.join(skillPath, file);
+    if (fs.existsSync(fpath)) {
+      content += fs.readFileSync(fpath, 'utf8') + ' ';
+    }
+  }
+  
+  // Extract description (first paragraph after title)
+  const descMatch = content.match(/#{1,2}\s*\w+.*?\n\n([^#\n]+)/);
+  if (descMatch) {
+    desc = descMatch[1].replace(/[#*`]/g, '').trim().substring(0, 200);
+  }
+  
+  // Extract keywords (words that appear frequently)
+  const words = content.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3);
+  
+  // Count word frequency
+  const freq = {};
+  for (const w of words) {
+    freq[w] = (freq[w] || 0) + 1;
+  }
+  
+  // Get top keywords
+  keywords = Object.entries(freq)
+    .filter(([w]) => !['skill', 'openclaw', 'command', 'description', 'usage', 'config'].includes(w))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([w]) => w);
+  
+  // Add to learned skills
+  memory.learnedSkills.push({
+    name,
+    desc: desc || `${name} skill`,
+    keywords,
+    learnedFrom: 'local',
+    learnedAt: new Date().toISOString(),
+    source: skillPath
+  });
+  
+  saveMemory(memory);
+  log(`Learned: ${name} (${keywords.length} keywords)`, 'green');
+  return true;
+}
+
+// Learn from search behavior
+function learnFromSearch(query) {
+  const memory = loadMemory();
+  memory.searchHistory.push({ query, timestamp: new Date().toISOString() });
+  
+  // Keep only last 100 searches
+  if (memory.searchHistory.length > 100) {
+    memory.searchHistory = memory.searchHistory.slice(-100);
+  }
+  
+  saveMemory(memory);
+}
+
+// Learn from installation
+function learnFromInstall(name, repo) {
+  const memory = loadMemory();
+  memory.installHistory.push({ name, repo, timestamp: new Date().toISOString() });
+  memory.usageCount[name] = (memory.usageCount[name] || 0) + 1;
+  saveMemory(memory);
+  
+  // Also learn from local if just installed
+  const skillsDir = path.join(__dirname, '..');
+  const skillPath = path.join(skillsDir, name);
+  if (fs.existsSync(skillPath)) {
+    learnFromLocal(skillPath);
+  }
+}
+
+// Scan local skills and auto-learn
+function scanLocalSkills() {
+  const memory = loadMemory();
+  const skillsDir = path.join(__dirname, '..');
+  
+  if (!fs.existsSync(skillsDir)) return [];
+  
+  const learnedNames = new Set(memory.learnedSkills.map(s => s.name));
+  const newSkills = [];
+  
+  const items = fs.readdirSync(skillsDir);
+  for (const item of items) {
+    const itemPath = path.join(skillsDir, item);
+    if (!fs.statSync(itemPath).isDirectory()) continue;
+    if (item === 'skillstore') continue; // Skip self
+    
+    if (!learnedNames.has(item)) {
+      learnFromLocal(itemPath);
+      newSkills.push(item);
+    }
+  }
+  
+  return newSkills;
+}
+
+// Get all learned skills
+function getLearnedSkills() {
+  const memory = loadMemory();
+  return memory.learnedSkills;
+}
+
+// Recommend based on usage
+function getRecommendations(limit = 5) {
+  const memory = loadMemory();
+  
+  // Sort by usage count
+  const sorted = Object.entries(memory.usageCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+  
+  return sorted.map(([name, count]) => {
+    const skill = memory.learnedSkills.find(s => s.name === name);
+    return { name, count, ...skill };
+  });
 }
 
 // Prompt user
@@ -97,7 +253,7 @@ function httpGet(url) {
   });
 }
 
-// Tokenize text into words
+// Tokenize text
 function tokenize(text) {
   return text.toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -105,7 +261,7 @@ function tokenize(text) {
     .filter(w => w.length > 2);
 }
 
-// Calculate similarity between query and skill
+// Calculate similarity
 function calculateSimilarity(query, skill) {
   const queryWords = new Set(tokenize(query));
   const skillWords = new Set([
@@ -114,57 +270,48 @@ function calculateSimilarity(query, skill) {
     ...(skill.keywords || [])
   ]);
   
-  // Jaccard similarity
   const intersection = [...queryWords].filter(w => skillWords.has(w));
   const union = new Set([...queryWords, ...skillWords]);
   
   let score = intersection.length / union.size;
   
-  // Boost for exact keyword matches
   for (const word of queryWords) {
     if ((skill.keywords || []).includes(word)) score += 0.1;
     if (skill.name.toLowerCase().includes(word)) score += 0.15;
   }
   
-  // Boost for name match
   const queryLower = query.toLowerCase();
   if (skill.name.toLowerCase().includes(queryLower.split(' ')[0])) {
     score += 0.1;
   }
   
-  return Math.min(score, 1); // Cap at 1.0
+  return Math.min(score, 1);
 }
 
-// Search local skills with content analysis
+// Search local skills
 function searchLocal(query) {
   const skillsDir = path.join(__dirname, '..');
   if (!fs.existsSync(skillsDir)) return [];
   
   const results = [];
   const items = fs.readdirSync(skillsDir);
-  const q = query.toLowerCase();
   
   for (const item of items) {
     const itemPath = path.join(skillsDir, item);
     if (!fs.statSync(itemPath).isDirectory()) continue;
     
     let content = '';
-    let fullDesc = '';
-    
-    // Read SKILL.md and README.md
-    for (const file of ['SKILL.md', 'README.md']) {
+    for (const file of ['SKILL.md', 'README.md', 'main.js']) {
       const fpath = path.join(itemPath, file);
       if (fs.existsSync(fpath)) {
         content += fs.readFileSync(fpath, 'utf8') + ' ';
       }
     }
     
-    fullDesc = content;
-    
     const score = calculateSimilarity(query, {
       name: item,
-      desc: fullDesc.substring(0, 500),
-      keywords: tokenize(fullDesc)
+      desc: content.substring(0, 500),
+      keywords: tokenize(content)
     });
     
     if (score >= MATCH_THRESHOLD) {
@@ -172,7 +319,7 @@ function searchLocal(query) {
         name: item,
         score,
         type: 'local',
-        desc: fullDesc.substring(0, 200).replace(/[#*`\n]/g, ' ').trim()
+        desc: content.substring(0, 200).replace(/[#*`\n]/g, ' ').trim()
       });
     }
   }
@@ -180,10 +327,28 @@ function searchLocal(query) {
   return results.sort((a, b) => b.score - a.score);
 }
 
-// Search GitHub with semantic matching
-async function searchGitHub(query) {
-  log(`Searching GitHub...`, 'gray');
+// Search learned skills (memory)
+function searchLearned(query) {
+  const memory = loadMemory();
+  const results = [];
   
+  for (const skill of memory.learnedSkills) {
+    const score = calculateSimilarity(query, skill);
+    
+    if (score >= MATCH_THRESHOLD) {
+      results.push({
+        ...skill,
+        score,
+        type: 'learned'
+      });
+    }
+  }
+  
+  return results.sort((a, b) => b.score - a.score);
+}
+
+// Search GitHub
+async function searchGitHub(query) {
   try {
     const results = await httpGet(
       `https://api.github.com/search/repositories?q=openclaw+${encodeURIComponent(query)}+in:name,description&per_page=10`
@@ -191,90 +356,50 @@ async function searchGitHub(query) {
     
     if (!results.items) return [];
     
-    const scoredResults = [];
-    
-    for (const r of results.items) {
-      const score = calculateSimilarity(query, {
-        name: r.name,
-        desc: r.description || '',
-        keywords: tokenize(r.name + ' ' + (r.description || ''))
-      });
-      
-      if (score >= MATCH_THRESHOLD) {
-        scoredResults.push({
-          name: r.name,
-          fullName: r.full_name,
-          desc: r.description || 'No description',
-          url: r.html_url,
-          stars: r.stargazers_count,
-          score,
-          type: 'github'
-        });
-      }
-    }
-    
-    return scoredResults.sort((a, b) => b.score - a.score);
-    
+    return results.items.map(r => ({
+      name: r.name,
+      fullName: r.full_name,
+      desc: r.desc || 'No description',
+      url: r.html_url,
+      stars: r.stargazers_count,
+      score: calculateSimilarity(query, { name: r.name, desc: r.description || '', keywords: [] }),
+      type: 'github'
+    })).filter(r => r.score >= MATCH_THRESHOLD * 0.8)
+      .sort((a, b) => b.score - a.score);
   } catch (e) {
     return [];
   }
 }
 
-// Search ClawHub for existing skills
+// Search ClawHub
 async function searchClawHub(query) {
-  log(`Searching ClawHub...`, 'gray');
-  
   try {
-    // Check if clawhub CLI is available
-    const check = execSync('which clawhub', { encoding: 'utf8' }).trim();
-    if (!check) return [];
-    
-    // Use clawhub search
     const result = execSync(`clawhub search ${query} 2>&1`, { 
       encoding: 'utf8',
       timeout: 15000 
     });
     
     const lines = result.split('\n').filter(l => l.includes('http'));
-    const scoredResults = [];
-    
-    for (const line of lines) {
+    return lines.map(line => {
       const match = line.match(/- \[([^\]]+)\]\(([^)]+)\)/);
-      if (match) {
-        const name = match[1];
-        const url = match[2];
-        
-        const score = calculateSimilarity(query, {
-          name: name,
-          desc: name,
-          keywords: tokenize(name)
-        });
-        
-        if (score >= MATCH_THRESHOLD * 0.8) { // Lower threshold for external search
-          scoredResults.push({
-            name,
-            url,
-            desc: `Published on ClawHub`,
-            score,
-            type: 'clawhub'
-          });
-        }
-      }
-    }
-    
-    return scoredResults.sort((a, b) => b.score - a.score);
-    
+      if (!match) return null;
+      
+      return {
+        name: match[1],
+        url: match[2],
+        desc: 'Published on ClawHub',
+        score: calculateSimilarity(query, { name: match[1], desc: '', keywords: [] }),
+        type: 'clawhub'
+      };
+    }).filter(Boolean).filter(r => r.score >= MATCH_THRESHOLD * 0.6);
   } catch (e) {
     return [];
   }
 }
 
-// Search AwesomeList for existing skills
+// Search AwesomeList
 async function searchAwesomeList(query) {
-  log(`Searching AwesomeList...`, 'gray');
-  
   try {
-    // Search the awesome-openclaw-skills README
     const data = await httpGet(
       'https://raw.githubusercontent.com/VoltAgent/awesome-openclaw-skills/main/README.md'
     );
@@ -282,30 +407,25 @@ async function searchAwesomeList(query) {
     if (!data || typeof data !== 'string') return [];
     
     const lines = data.split('\n');
-    const scoredResults = [];
-    const q = query.toLowerCase();
+    const results = [];
     
     for (const line of lines) {
       if (line.includes('- [')) {
         const match = line.match(/- \[([^\]]+)\]\(([^)]+)\)/);
         if (match) {
-          const name = match[1];
-          const url = match[2];
-          
-          // Extract description from line
           const descMatch = line.match(/\]\([^)]+\)\s*-\s*(.+)/);
           const desc = descMatch ? descMatch[1] : '';
           
           const score = calculateSimilarity(query, {
-            name: name,
-            desc: desc,
-            keywords: tokenize(name + ' ' + desc)
+            name: match[1],
+            desc,
+            keywords: tokenize(match[1] + ' ' + desc)
           });
           
           if (score >= MATCH_THRESHOLD * 0.8) {
-            scoredResults.push({
-              name,
-              url,
+            results.push({
+              name: match[1],
+              url: match[2],
               desc: desc.substring(0, 100),
               score,
               type: 'awesome'
@@ -315,66 +435,51 @@ async function searchAwesomeList(query) {
       }
     }
     
-    return scoredResults.sort((a, b) => b.score - a.score);
-    
+    return results.sort((a, b) => b.score - a.score);
   } catch (e) {
     return [];
   }
 }
 
-// Search known skills database
+// Search known/default skills
 function searchKnown(query) {
-  const scoredResults = [];
-  
-  for (const skill of SKILL_DATABASE) {
-    const score = calculateSimilarity(query, skill);
-    
-    if (score >= MATCH_THRESHOLD) {
-      scoredResults.push({
-        name: skill.name,
-        desc: skill.desc,
-        score,
-        type: 'known'
-      });
-    }
-  }
-  
-  return scoredResults.sort((a, b) => b.score - a.score);
+  return DEFAULT_SKILLS.map(skill => ({
+    ...skill,
+    score: calculateSimilarity(query, skill),
+    type: 'known'
+  })).filter(r => r.score >= MATCH_THRESHOLD)
+    .sort((a, b) => b.score - a.score);
 }
 
-// Check for existing skills before creating new one
+// Check for existing skills before creating
 async function checkExistingSkills(name) {
   log(C.bright + `\n=== Checking for Existing Skills: "${name}" ===` + C.reset, 'cyan');
   
-  const allResults = [];
-  
-  // Search all sources in parallel
-  const [local, github, clawhub, awesome, known] = await Promise.all([
+  const [local, learned, github, clawhub, awesome, known] = await Promise.all([
     searchLocal(name),
+    searchLearned(name),
     searchGitHub(name),
     searchClawHub(name),
     searchAwesomeList(name),
     searchKnown(name)
   ]);
   
-  allResults.push(...local, ...github, ...clawhub, ...awesome, ...known);
+  const allResults = [...local, ...learned, ...github, ...clawhub, ...awesome, ...known];
   
   if (allResults.length > 0) {
     log(`\n${C.yellow}Found ${allResults.length} existing skill(s):${C.reset}\n`, 'yellow');
     
-    // Group by type
     const types = {
       local: { name: 'Local', color: 'green', items: [] },
-      known: { name: 'Known', color: 'mag', items: [] },
+      learned: { name: 'Learned', color: 'mag', items: [] },
+      known: { name: 'Known', color: 'blue', items: [] },
       github: { name: 'GitHub', color: 'cyan', items: [] },
       clawhub: { name: 'ClawHub', color: 'yellow', items: [] },
-      awesome: { name: 'AwesomeList', color: 'blue', items: [] }
+      awesome: { name: 'AwesomeList', color: 'gray', items: [] }
     };
     
     for (const r of allResults.slice(0, 10)) {
-      if (types[r.type]) {
-        types[r.type].items.push(r);
-      }
+      if (types[r.type]) types[r.type].items.push(r);
     }
     
     for (const [type, info] of Object.entries(types)) {
@@ -386,8 +491,7 @@ async function checkExistingSkills(name) {
       }
     }
     
-    log(`\n${C.yellow}Recommendation: Consider using an existing skill instead of creating a duplicate.${C.reset}`, 'yellow');
-    
+    log(`\n${C.yellow}Recommendation: Consider using an existing skill.${C.reset}`, 'yellow');
     return allResults;
   }
   
@@ -395,10 +499,26 @@ async function checkExistingSkills(name) {
   return [];
 }
 
-// Show search results with scores
-function showResults(query, results) {
-  const matchCount = results.filter(r => r.score >= MATCH_THRESHOLD).length;
+// Main search with learning
+async function search(query) {
+  // Learn from this search
+  learnFromSearch(query);
   
+  const [local, learned, github, clawhub, awesome, known] = await Promise.all([
+    searchLocal(query),
+    searchLearned(query),
+    searchGitHub(query),
+    searchClawHub(query),
+    searchAwesomeList(query),
+    searchKnown(query)
+  ]);
+  
+  const results = [...local, ...learned, ...github, ...clawhub, ...awesome, ...known];
+  return results.sort((a, b) => b.score - a.score);
+}
+
+// Show results
+function showResults(query, results) {
   log(`\n${C.bright}Search Results for "${query}"${C.reset}`, 'cyan');
   log(`Found: ${results.length} results\n`, 'gray');
   
@@ -407,21 +527,8 @@ function showResults(query, results) {
     return false;
   }
   
-  const typeLabels = {
-    local: '[LOCAL]',
-    known: '[KNOWN]',
-    github: '[GIT]',
-    clawhub: '[CLAW]',
-    awesome: '[AWESOME]'
-  };
-  
-  const typeColors = {
-    local: 'green',
-    known: 'mag',
-    github: 'cyan',
-    clawhub: 'yellow',
-    awesome: 'blue'
-  };
+  const typeLabels = { local: '[LOCAL]', learned: '[LEARN]', known: '[KNOWN]', github: '[GIT]', clawhub: '[CLAW]', awesome: '[AWESOME]' };
+  const typeColors = { local: 'green', learned: 'mag', known: 'blue', github: 'cyan', clawhub: 'yellow', awesome: 'gray' };
   
   results.slice(0, 15).forEach((r, i) => {
     const bar = '█'.repeat(Math.max(1, Math.floor(r.score * 10)));
@@ -448,17 +555,18 @@ async function installFromGitHub(repo, name) {
     return false;
   }
   
-  const cmd = `git clone https://github.com/${repo}.git "${targetDir}"`;
-  
   return new Promise((resolve) => {
-    exec(cmd, (error) => {
+    exec(`git clone https://github.com/${repo}.git "${targetDir}"`, (error) => {
       if (error) {
-        err(`Failed to install: ${error.message}`);
+        err(`Failed: ${error.message}`);
         resolve(false);
         return;
       }
       
       log(`Installed to ${targetDir}`, 'green');
+      
+      // Learn from installed skill
+      learnFromInstall(name, repo);
       
       const config = loadConfig();
       config.installed.push({ name, repo, installedAt: new Date().toISOString() });
@@ -469,7 +577,7 @@ async function installFromGitHub(repo, name) {
   });
 }
 
-// Create new skill with templates
+// Create new skill
 function createNewSkill(name) {
   log(`\nCreating new skill: ${name}`, 'cyan');
   
@@ -484,55 +592,9 @@ function createNewSkill(name) {
   fs.mkdirSync(targetDir, { recursive: true });
   
   const templates = {
-    'SKILL.md': `# ${name}
-
-Brief description of what this skill does.
-
-## Setup
-
-\`\`\`bash
-# Installation steps
-\`\`\`
-
-## Usage
-
-\`\`\`bash
-${name} command
-\`\`\`
-
-## Configuration
-
-Required environment variables or config options.
-
-## Supported Commands
-
-- \`command1\` - Description
-- \`command2\` - Description`,
-    
-    'README.md': `# ${name}
-
-Brief description.
-
-## Features
-
-- Feature 1
-- Feature 2
-
-## Quick Start
-
-1. Install
-2. Configure
-3. Use
-
-## Documentation
-
-See SKILL.md for full details.`,
-    
-    'config.json': `{
-  "name": "${name}",
-  "version": "1.0.0",
-  "description": "Skill description"
-}`
+    'SKILL.md': `# ${name}\n\nBrief description.\n\n## Setup\n\n## Usage\n\n## Config`,
+    'README.md': `# ${name}\n\nDescription.\n\n## Features\n\n- Feature 1\n\n## Quick Start\n\n1. Install\n2. Use`,
+    'config.json': `{\n  "name": "${name}",\n  "version": "1.0.0",\n  "description": "Skill description"\n}`
   };
   
   for (const [filename, content] of Object.entries(templates)) {
@@ -541,13 +603,14 @@ See SKILL.md for full details.`,
   
   log(`Created skill at ${targetDir}`, 'green');
   
-  // Ensure config exists
+  // Learn the new skill
+  learnFromLocal(targetDir);
+  
   let config = { installed: [], searchHistory: [] };
   if (fs.existsSync(CONFIG_FILE)) {
     try { config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } 
-    catch (e) { config = { installed: [], searchHistory: [] }; }
+    catch (e) {}
   }
-  
   config.installed = config.installed || [];
   config.installed.push({ name, createdAt: new Date().toISOString() });
   saveConfig(config);
@@ -555,54 +618,56 @@ See SKILL.md for full details.`,
   return true;
 }
 
-// Main search function
-async function search(query) {
-  const results = [];
+// Show memory/stats
+function showMemory() {
+  const memory = loadMemory();
+  const config = loadConfig();
   
-  // Search all sources in parallel
-  const [local, github, clawhub, awesome, known] = await Promise.all([
-    searchLocal(query),
-    searchGitHub(query),
-    searchClawHub(query),
-    searchAwesomeList(query),
-    searchKnown(query)
-  ]);
+  log(C.bright + '\n=== SkillStore Memory ===\n' + C.reset, 'cyan');
   
-  results.push(...local, ...github, ...clawhub, ...awesome, ...known);
+  log(`Learned skills: ${memory.learnedSkills.length}`, 'green');
+  memory.learnedSkills.forEach(s => {
+    log(`  - ${s.name} (${s.keywords?.slice(0, 3).join(', ')})`, 'gray');
+  });
   
-  // Sort by score
-  results.sort((a, b) => b.score - a.score);
+  log(`\nSearches: ${memory.searchHistory.length}`, 'cyan');
+  log(`Installs: ${memory.installHistory.length}`, 'cyan');
   
-  return results;
+  log(`\nMost used:`, 'yellow');
+  const top = getRecommendations(5);
+  top.forEach(s => {
+    log(`  - ${s.name} (${s.count} uses)`, 'gray');
+  });
+  
+  log(`\nLocal skills: ${config.installed.length}`, 'mag');
 }
 
-// Show help
+// Help
 function help() {
   log(C.bright + `
-SkillStore - OpenClaw Skill Manager
+SkillStore - OpenClaw Skill Manager with Self-Learning
 
 USAGE:
-  skillstore search <query>     Search for skills
-  skillstore install <repo>    Install from GitHub
-  skillstore create <name>     Create new skill
-  skillstore check <name>      Check for existing skills before creating
-  skillstore list              List installed skills
-  skillstore help              Show this help
+  skillstore search <query>     Search skills (learns from search)
+  skillstore check <name>       Check duplicates before creating
+  skillstore create <name>      Create new skill (auto-learns)
+  skillstore install <repo>     Install from GitHub (learns)
+  skillstore scan               Scan and learn local skills
+  skillstore memory             Show learning memory
+  skillstore list               List installed skills
+  skillstore help               Show help
 
-SEARCH SOURCES:
-  - Local skills (${path.join(__dirname, '..')})
-  - Known skills database
-  - GitHub (openclaw repos)
-  - ClawHub (clawhub.ai)
-  - Awesome OpenClaw Skills list
+FEATURES:
+  - Multi-source search (Local, Learned, Known, GitHub, ClawHub, AwesomeList)
+  - Auto-learn from local skills
+  - Memory of search/install history
+  - Usage-based recommendations
+  - Duplicate detection
 
 EXAMPLES:
   skillstore search home
-  skillstore search weather
-  skillstore check my-new-skill
-  skillstore create my-awesome-skill
-
-THRESHOLD: ${Math.round(MATCH_THRESHOLD * 100)}% similarity required
+  skillstore scan
+  skillstore memory
 ` + C.reset, 'cyan');
 }
 
@@ -612,6 +677,11 @@ async function main() {
   const cmd = args[0];
   const arg = args[1];
   
+  // Auto-scan local skills on startup
+  if (cmd && cmd !== 'help' && cmd !== '-h') {
+    scanLocalSkills();
+  }
+  
   if (!cmd || cmd === 'help' || cmd === '-h') {
     help();
     return;
@@ -620,39 +690,26 @@ async function main() {
   switch (cmd) {
     case 'search':
     case 's':
-      if (!arg) {
-        err('Usage: skillstore search <query>');
-        process.exit(1);
-      }
+      if (!arg) { err('Usage: skillstore search <query>'); process.exit(1); }
       const results = await search(arg);
       showResults(arg, results);
       break;
       
     case 'check':
-      if (!arg) {
-        err('Usage: skillstore check <name>');
-        process.exit(1);
-      }
+      if (!arg) { err('Usage: skillstore check <name>'); process.exit(1); }
       await checkExistingSkills(arg);
       break;
       
     case 'install':
     case 'i':
-      if (!arg) {
-        err('Usage: skillstore install <repo>');
-        process.exit(1);
-      }
+      if (!arg) { err('Usage: skillstore install <repo>'); process.exit(1); }
       const [repoName] = arg.split('/').slice(-1);
       await installFromGitHub(arg, repoName.replace('.git', ''));
       break;
       
     case 'create':
     case 'c':
-      if (!arg) {
-        err('Usage: skillstore create <name>');
-        process.exit(1);
-      }
-      // First check for existing
+      if (!arg) { err('Usage: skillstore create <name>'); process.exit(1); }
       const existing = await checkExistingSkills(arg);
       if (existing.length > 0) {
         const response = await prompt('\nCreate anyway? (y/N): ');
@@ -664,17 +721,25 @@ async function main() {
       createNewSkill(arg);
       break;
       
+    case 'scan':
+      const newSkills = scanLocalSkills();
+      log(`\nScanned local skills. New learned: ${newSkills.length}`, 'green');
+      break;
+      
+    case 'memory':
+    case 'stats':
+      showMemory();
+      break;
+      
     case 'list':
     case 'ls':
       const config = loadConfig();
-      log(`\nInstalled skills: ${config.installed.length}`, 'cyan');
-      config.installed.forEach(s => {
-        log(`  - ${s.name}`, 'green');
-      });
+      log(`\nInstalled: ${config.installed.length}`, 'cyan');
+      config.installed.forEach(s => log(`  - ${s.name}`, 'green'));
       break;
       
     default:
-      err(`Unknown command: ${cmd}`);
+      err(`Unknown: ${cmd}`);
       help();
   }
 }
