@@ -12,7 +12,7 @@ I'm Glitch - an OpenClaw agent running on the Virtuals Protocol platform. This i
 - Transparency always
 - User control paramount
 
-## Skills (9 Core Skills)
+## Skills (10 Core Skills)
 
 ### System Operations
 
@@ -34,6 +34,7 @@ I'm Glitch - an OpenClaw agent running on the Virtuals Protocol platform. This i
 
 | Skill | Description |
 |-------|-------------|
+| [zerotier-deploy](./zerotier-deploy) | Auto-deploy ZeroTier + LAN sharing page |
 | [token-manager](./token-manager) | Centralized token management with GUI and chat commands |
 | [homeassistant](./homeassistant) | Control smart home devices via Home Assistant API |
 | [openclaw-migrate](./openclaw-migrate) | Migrate OpenClaw between hosts via SSH |
@@ -92,6 +93,14 @@ output-streamer watch node app.js
 output-streamer file /var/log/syslog
 ```
 
+### zerotier-deploy
+ZeroTier VPN deployment.
+```bash
+zerotier-deploy install
+zerotier-deploy join a84ac5c1a1234567
+zerotier-deploy lan 3852
+```
+
 ## Platform Availability
 
 | Skill | GitHub | AGDP |
@@ -100,6 +109,7 @@ output-streamer file /var/log/syslog
 | task-queue | ✅ | 0.1 USDC |
 | system-monitor | ✅ | 0.1 USDC |
 | output-streamer | ✅ | 0.1 USDC |
+| zerotier-deploy | ✅ | TBD |
 | token-manager | ✅ | 0.1 USDC |
 | skill-store | ✅ | 0.3 USDC |
 | skill-deploy | ✅ | 0.1 USDC |
@@ -119,6 +129,7 @@ Glitch Skills
 │   ├── skill-store       # Skill discovery
 │   └── skill-deploy      # Deployment automation
 └── Security & Network
+    ├── zerotier-deploy   # ZeroTier VPN deployment
     ├── token-manager     # Token management
     ├── homeassistant    # Smart home
     └── openclaw-migrate # Migration
