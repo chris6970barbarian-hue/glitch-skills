@@ -552,8 +552,185 @@ function main() {
     case 'toggle': console.log(`Access: ${toggleAccess() ? 'ENABLED' : 'DISABLED'}`); break;
     case 'status': const d = loadData(); console.log(`Access: ${d.accessEnabled ? 'ENABLED' : 'DISABLED'}\nTokens: ${Object.keys(d.tokens).length}\nPlatforms: ${Object.keys(d.platforms).length}`); break;
     case 'platforms': console.log(JSON.stringify(listPlatforms(), null, 2)); break;
+    case 'msg': case 'message': 
+      // Handle messages from chat platforms
+      const message = args.slice(1).join(' ');
+      console.log(handleChatMessage(message));
+      break;
+    case 'webhook':
+      // Start webhook server for chat platforms
+      startWebhookServer(args[1] || 3848);
+      break;
     default: startTerminal();
   }
+}
+
+// Handle messages from chat platforms (Discord, Telegram, etc.)
+function handleChatMessage(input) {
+  const data = loadData();
+  const cmd = input.trim().toLowerCase().split(/\s+/)[0];
+  const args = input.trim().split(/\s+/).slice(1);
+  
+  let response = '';
+  
+  switch (cmd) {
+    case 'status':
+    case 's':
+      response = `🔐 Token Manager Status\n\n` +
+        `Agent Access: ${data.accessEnabled ? '✅ ENABLED' : '❌ DISABLED'}\n` +
+        `Tokens: ${Object.keys(data.tokens).length}\n` +
+        `Platforms: ${Object.keys(data.platforms).length}`;
+      break;
+      
+    case 'tokens':
+    case 'list':
+    case 'ls':
+      const names = Object.keys(data.tokens);
+      if (names.length === 0) {
+        response = '📭 No tokens stored';
+      } else {
+        response = '🔑 Stored Tokens:\n' + names.map(n => 
+          `• ${n} [${data.tokens[n].type}]`
+        ).join('\n');
+      }
+      break;
+      
+    case 'platforms':
+    case 'platform':
+      const platforms = Object.keys(data.platforms);
+      if (platforms.length === 0) {
+        response = '🔗 No platforms connected';
+      } else {
+        response = '🔗 Connected Platforms:\n' + platforms.map(p => 
+          `• ${p}`
+        ).join('\n');
+      }
+      break;
+      
+    case 'enable':
+    case 'on':
+      const newState = toggleAccess(true);
+      response = `✅ Agent Access: ${newState ? 'ENABLED' : 'DISABLED'}`;
+      break;
+      
+    case 'disable':
+    case 'off':
+      toggleAccess(false);
+      response = '❌ Agent Access: DISABLED';
+      break;
+      
+    case 'toggle':
+    case 'switch':
+      const toggled = toggleAccess();
+      response = `🔄 Agent Access: ${toggled ? 'ENABLED' : 'DISABLED'}`;
+      break;
+      
+    case 'history':
+    case 'log':
+      const history = data.history.slice(-10).reverse();
+      if (history.length === 0) {
+        response = '📝 No history';
+      } else {
+        response = '📝 Recent History:\n' + history.map(h => {
+          const icon = h.action === 'add' ? '➕' : 
+                       h.action === 'remove' ? '❌' : 
+                       h.action === 'enable' ? '✅' : 
+                       h.action === 'disable' ? '❌' : '📝';
+          return `${icon} ${h.action}${h.name ? ' ' + h.name : ''}`;
+        }).join('\n');
+      }
+      break;
+      
+    case 'help':
+    case '?':
+      response = `🔐 Token Manager Commands:
+
+status (s)    - Show access status
+tokens (ls)   - List stored tokens  
+platforms     - List connected platforms
+enable/on     - Enable agent access
+disable/off   - Disable agent access
+toggle        - Toggle access
+history (log) - Show recent activity
+add <name>   - Add token (use GUI)
+remove <name> - Remove token (use GUI)
+gui           - Open web GUI
+
+Web GUI: http://localhost:3847`;
+      break;
+      
+    default:
+      response = `❓ Unknown command: ${cmd}\nType "help" for available commands`;
+  }
+  
+  return response;
+}
+
+// Webhook server for chat platforms
+function startWebhookServer(port) {
+  const server = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json');
+    
+    if (req.method === 'POST' && req.url === '/webhook') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(body);
+          const message = payload.message || payload.text || payload.content || '';
+          const response = handleChatMessage(message);
+          res.end(JSON.stringify({ response }));
+        } catch (e) {
+          res.end(JSON.stringify({ error: 'Invalid payload' }));
+        }
+      });
+      return;
+    }
+    
+    // GET endpoint for status
+    if (req.method === 'GET' && req.url === '/status') {
+      const data = loadData();
+      res.end(JSON.stringify({
+        accessEnabled: data.accessEnabled,
+        tokens: Object.keys(data.tokens).length,
+        platforms: Object.keys(data.platforms).length
+      }));
+      return;
+    }
+    
+    // OpenClaw message handler endpoint
+    if (req.method === 'POST' && req.url === '/message') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        const response = handleChatMessage(body);
+        res.end(response);
+      });
+      return;
+    }
+    
+    res.end(JSON.stringify({ error: 'Not found' }));
+  });
+  
+  server.listen(port, () => {
+    console.log(`
+╔═══════════════════════════════════════╗
+║  Token Manager Webhook Server          ║
+╠═══════════════════════════════════════╣
+║  Webhook: http://localhost:${port}/webhook  ║
+║  Status:  http://localhost:${port}/status   ║
+║  Message: http://localhost:${port}/message  ║
+╚═══════════════════════════════════════╝
+
+Configure your chat platform webhook to point to:
+  http://<your-ip>:${port}/webhook
+
+Supported platforms: Discord, Telegram, Lark, etc.
+`);
+  });
+  
+  return server;
 }
 
 main();
